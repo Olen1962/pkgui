@@ -96,7 +96,7 @@ fn list_installed_packages() -> Vec<Package> {
 fn list_orphan_packages() -> Vec<Package> {
     let output = Command::new("pkg")
         .arg("query")
-        .arg("-a")
+        .arg("-o")
         .arg("%n-%v")
         .output();
 
