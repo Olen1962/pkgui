@@ -106,8 +106,9 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
     // OK button
     let ok_btn = Button::with_label("OK");
     ok_btn.set_halign(gtk4::Align::End);
+    let dialog_clone = dialog.clone();
     ok_btn.connect_clicked(move |_| {
-        dialog.close();
+        dialog_clone.close();
     });
     main_box.append(&ok_btn);
 
