@@ -389,47 +389,55 @@ fn main() -> glib::ExitCode {
         let scrolled_clone4 = scrolled.clone();
 
         // Current category and packages
-        let current_category = Arc::new(Mutex::new("Installed".to_string()));
+        let current_category = Arc::new(Mutex::new("Installed Packages".to_string()));
         let all_packages = Arc::new(Mutex::new(list_installed_packages()));
         
         let search_entry_clone = search_entry.clone();
         let scrolled_for_search = scrolled.clone();
-        let all_packages_clone = all_packages.clone();
-        let current_category_clone = current_category.clone();
+        let all_packages_for_search = all_packages.clone();
+        let current_category_for_search = current_category.clone();
         
         search_entry.connect_changed(move |entry| {
             let search_text = entry.text().to_string();
-            let category = current_category_clone.lock().unwrap();
-            let packages = all_packages_clone.lock().unwrap();
+            let category = current_category_for_search.lock().unwrap();
+            let packages = all_packages_for_search.lock().unwrap();
             let filtered = filter_packages(&packages, &search_text);
             update_package_list(&scrolled_for_search, filtered, &category);
         });
 
+        let all_packages_refresh = all_packages.clone();
+        let current_category_refresh = current_category.clone();
         refresh_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
-            *all_packages.lock().unwrap() = packages.clone();
-            *current_category.lock().unwrap() = "Installed Packages".to_string();
+            *all_packages_refresh.lock().unwrap() = packages.clone();
+            *current_category_refresh.lock().unwrap() = "Installed Packages".to_string();
             update_package_list(&scrolled_clone, packages, "Installed Packages");
         });
 
+        let all_packages_installed = all_packages.clone();
+        let current_category_installed = current_category.clone();
         installed_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
-            *all_packages.lock().unwrap() = packages.clone();
-            *current_category.lock().unwrap() = "Installed Packages".to_string();
+            *all_packages_installed.lock().unwrap() = packages.clone();
+            *current_category_installed.lock().unwrap() = "Installed Packages".to_string();
             update_package_list(&scrolled_clone2, packages, "Installed Packages");
         });
 
+        let all_packages_orphans = all_packages.clone();
+        let current_category_orphans = current_category.clone();
         orphans_btn.connect_clicked(move |_| {
             let packages = list_orphan_packages();
-            *all_packages.lock().unwrap() = packages.clone();
-            *current_category.lock().unwrap() = "Orphan Packages".to_string();
+            *all_packages_orphans.lock().unwrap() = packages.clone();
+            *current_category_orphans.lock().unwrap() = "Orphan Packages".to_string();
             update_package_list(&scrolled_clone3, packages, "Orphan Packages");
         });
 
+        let all_packages_deps = all_packages.clone();
+        let current_category_deps = current_category.clone();
         deps_btn.connect_clicked(move |_| {
             let packages = list_dependencies();
-            *all_packages.lock().unwrap() = packages.clone();
-            *current_category.lock().unwrap() = "Dependencies".to_string();
+            *all_packages_deps.lock().unwrap() = packages.clone();
+            *current_category_deps.lock().unwrap() = "Dependencies".to_string();
             update_package_list(&scrolled_clone4, packages, "Dependencies");
         });
 
