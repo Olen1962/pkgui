@@ -10,59 +10,62 @@ struct Package {
     comment: String,
 }
 
+fn parse_pkg_info_output(stdout: &str) -> Vec<Package> {
+    let mut packages = Vec::new();
+    let mut current_pkg = Package {
+        name: String::new(),
+        version: String::new(),
+        origin: String::new(),
+        comment: String::new(),
+    };
+    let mut in_pkg = false;
+
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if trimmed.ends_with(':') {
+            if in_pkg && !current_pkg.name.is_empty() {
+                packages.push(current_pkg);
+            }
+            let name_ver = trimmed.trim_end_matches(':');
+            let parts: Vec<&str> = name_ver.split('-').collect();
+            current_pkg = Package {
+                name: parts.get(0).unwrap_or(&name_ver).to_string(),
+                version: if parts.len() > 1 { parts[1..].join("-") } else { String::new() },
+                origin: String::new(),
+                comment: String::new(),
+            };
+            in_pkg = true;
+        } else if in_pkg {
+            if trimmed.starts_with("Origin :") {
+                current_pkg.origin = trimmed.trim_start_matches("Origin :").trim().to_string();
+            } else if trimmed.starts_with("Comment :") {
+                current_pkg.comment = trimmed.trim_start_matches("Comment :").trim().to_string();
+            } else if trimmed.starts_with("Version :") && current_pkg.version.is_empty() {
+                current_pkg.version = trimmed.trim_start_matches("Version :").trim().to_string();
+            }
+        }
+    }
+
+    if in_pkg && !current_pkg.name.is_empty() {
+        packages.push(current_pkg);
+    }
+
+    packages
+}
+
 fn list_installed_packages() -> Vec<Package> {
     let output = Command::new("pkg")
         .arg("info")
-        .arg("-l")
         .output();
 
     match output {
         Ok(result) if result.status.success() => {
             let stdout = String::from_utf8_lossy(&result.stdout);
-            let mut packages = Vec::new();
-            let mut current_pkg = Package {
-                name: String::new(),
-                version: String::new(),
-                origin: String::new(),
-                comment: String::new(),
-            };
-            let mut in_pkg = false;
-
-            for line in stdout.lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-
-                if trimmed.ends_with(':') {
-                    if in_pkg && !current_pkg.name.is_empty() {
-                        packages.push(current_pkg);
-                    }
-                    let name_ver = trimmed.trim_end_matches(':');
-                    let parts: Vec<&str> = name_ver.split('-').collect();
-                    current_pkg = Package {
-                        name: parts.get(0).unwrap_or(&name_ver).to_string(),
-                        version: if parts.len() > 1 { parts[1..].join("-") } else { String::new() },
-                        origin: String::new(),
-                        comment: String::new(),
-                    };
-                    in_pkg = true;
-                } else if in_pkg {
-                    if trimmed.starts_with("Origin :") {
-                        current_pkg.origin = trimmed.trim_start_matches("Origin :").trim().to_string();
-                    } else if trimmed.starts_with("Comment :") {
-                        current_pkg.comment = trimmed.trim_start_matches("Comment :").trim().to_string();
-                    } else if trimmed.starts_with("Version :") && current_pkg.version.is_empty() {
-                        current_pkg.version = trimmed.trim_start_matches("Version :").trim().to_string();
-                    }
-                }
-            }
-
-            if in_pkg && !current_pkg.name.is_empty() {
-                packages.push(current_pkg);
-            }
-
-            packages
+            parse_pkg_info_output(&stdout)
         }
         Ok(result) => {
             eprintln!("pkg info stderr: {}", String::from_utf8_lossy(&result.stderr));
@@ -76,7 +79,6 @@ fn list_installed_packages() -> Vec<Package> {
 }
 
 fn list_orphan_packages() -> Vec<Package> {
-    // Use pkg autoremove -n to list orphan packages (dry run)
     let output = Command::new("pkg")
         .arg("autoremove")
         .arg("-n")
@@ -90,7 +92,9 @@ fn list_orphan_packages() -> Vec<Package> {
 
             for line in stdout.lines() {
                 let trimmed = line.trim();
-                if trimmed.starts_with("The following") || trimmed.starts_with("Number of") {
+                if trimmed.starts_with("The following") || 
+                   trimmed.starts_with("Number of") ||
+                   trimmed.starts_with("Installed packages") {
                     continue;
                 }
                 if in_list && (trimmed.is_empty() || trimmed.chars().all(|c| c.is_whitespace())) {
@@ -110,7 +114,6 @@ fn list_orphan_packages() -> Vec<Package> {
                 return vec![];
             }
 
-            // Get details for each orphan package
             let mut packages = Vec::new();
             for name in names {
                 let output = Command::new("pkg")
@@ -121,24 +124,9 @@ fn list_orphan_packages() -> Vec<Package> {
                 if let Ok(result) = output {
                     if result.status.success() {
                         let stdout = String::from_utf8_lossy(&result.stdout);
-                        let mut pkg = Package {
-                            name: name.clone(),
-                            version: String::new(),
-                            origin: String::new(),
-                            comment: String::new(),
-                        };
-
-                        for line in stdout.lines() {
-                            let trimmed = line.trim();
-                            if trimmed.starts_with("Version :") {
-                                pkg.version = trimmed.trim_start_matches("Version :").trim().to_string();
-                            } else if trimmed.starts_with("Origin :") {
-                                pkg.origin = trimmed.trim_start_matches("Origin :").trim().to_string();
-                            } else if trimmed.starts_with("Comment :") {
-                                pkg.comment = trimmed.trim_start_matches("Comment :").trim().to_string();
-                            }
+                        if let Some(pkg) = parse_pkg_info_output(&stdout).into_iter().next() {
+                            packages.push(pkg);
                         }
-                        packages.push(pkg);
                     }
                 }
             }
@@ -156,67 +144,36 @@ fn list_orphan_packages() -> Vec<Package> {
 }
 
 fn list_dependencies() -> Vec<Package> {
-    // List all installed packages and filter those that are dependencies
+    // List automatic packages (installed as dependencies)
     let output = Command::new("pkg")
-        .arg("info")
-        .arg("-l")
-        .arg("-a")
+        .arg("query")
+        .arg("-e")
+        .arg("%a = 1")
+        .arg("%n\t%v\t%o\t%c")
         .output();
 
     match output {
         Ok(result) if result.status.success() => {
-            let stdout = String::from_utf8_lossy(&result.stdout);
-            let mut packages = Vec::new();
-            let mut current_pkg = Package {
-                name: String::new(),
-                version: String::new(),
-                origin: String::new(),
-                comment: String::new(),
-            };
-            let mut in_pkg = false;
-
-            for line in stdout.lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-
-                if trimmed.ends_with(':') {
-                    if in_pkg && !current_pkg.name.is_empty() {
-                        packages.push(current_pkg);
+            String::from_utf8_lossy(&result.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| {
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    Package {
+                        name: parts.get(0).unwrap_or(&"").to_string(),
+                        version: parts.get(1).unwrap_or(&"").to_string(),
+                        origin: parts.get(2).unwrap_or(&"").to_string(),
+                        comment: parts.get(3).unwrap_or(&"").to_string(),
                     }
-                    let name_ver = trimmed.trim_end_matches(':');
-                    let parts: Vec<&str> = name_ver.split('-').collect();
-                    current_pkg = Package {
-                        name: parts.get(0).unwrap_or(&name_ver).to_string(),
-                        version: if parts.len() > 1 { parts[1..].join("-") } else { String::new() },
-                        origin: String::new(),
-                        comment: String::new(),
-                    };
-                    in_pkg = true;
-                } else if in_pkg {
-                    if trimmed.starts_with("Origin :") {
-                        current_pkg.origin = trimmed.trim_start_matches("Origin :").trim().to_string();
-                    } else if trimmed.starts_with("Comment :") {
-                        current_pkg.comment = trimmed.trim_start_matches("Comment :").trim().to_string();
-                    } else if trimmed.starts_with("Version :") && current_pkg.version.is_empty() {
-                        current_pkg.version = trimmed.trim_start_matches("Version :").trim().to_string();
-                    }
-                }
-            }
-
-            if in_pkg && !current_pkg.name.is_empty() {
-                packages.push(current_pkg);
-            }
-
-            packages
+                })
+                .collect()
         }
         Ok(result) => {
-            eprintln!("pkg info -l -a stderr: {}", String::from_utf8_lossy(&result.stderr));
+            eprintln!("pkg query stderr: {}", String::from_utf8_lossy(&result.stderr));
             vec![]
         }
         Err(e) => {
-            eprintln!("pkg info -l -a error: {}", e);
+            eprintln!("pkg query error: {}", e);
             vec![]
         }
     }
