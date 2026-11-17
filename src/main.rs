@@ -2,6 +2,7 @@ use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Label, ListBox, ScrolledWindow, Separator};
 use libadwaita::{HeaderBar, WindowTitle};
 use std::process::Command;
+use std::collections::HashMap;
 
 struct Package {
     name: String,
@@ -10,122 +11,161 @@ struct Package {
     comment: String,
 }
 
-fn list_installed_packages() -> Vec<Package> {
-    // Get package list with name, version, origin, comment
+fn get_pkg_info(field: &str) -> String {
     let output = Command::new("pkg")
         .arg("query")
-        .arg("%n-%v\t%o\t%c")
+        .arg(field)
         .output();
-
+    
     match output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout).trim().to_string()
+        }
+        _ => String::new(),
+    }
+}
+
+fn get_pkg_info_with_flag(field: &str, flag: &str) -> String {
+    let output = Command::new("pkg")
+        .arg("query")
+        .arg(flag)
+        .arg(field)
+        .output();
+    
+    match output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout).trim().to_string()
+        }
+        _ => String::new(),
+    }
+}
+
+fn list_packages_with_details(filter: Option<&str>) -> Vec<Package> {
+    // Get all package names
+    let names_output = if let Some(f) = filter {
+        Command::new("pkg")
+            .arg("query")
+            .arg(f)
+            .arg("%n")
+            .output()
+    } else {
+        Command::new("pkg")
+            .arg("query")
+            .arg("%n")
+            .output()
+    };
+
+    let names = match names_output {
         Ok(result) if result.status.success() => {
             String::from_utf8_lossy(&result.stdout)
                 .lines()
                 .filter(|line| !line.trim().is_empty())
-                .map(|line| {
-                    let parts: Vec<&str> = line.split('\t').collect();
-                    let name_ver = parts.get(0).unwrap_or(&line);
-                    let origin = parts.get(1).unwrap_or(&"").to_string();
-                    let comment = parts.get(2).unwrap_or(&"").to_string();
-                    
-                    // Split name and version
-                    let name_parts: Vec<&str> = name_ver.split('-').collect();
-                    let name = name_parts.get(0).unwrap_or(&name_ver).to_string();
-                    let version = if name_parts.len() > 1 {
-                        name_parts[1..].join("-")
-                    } else {
-                        String::new()
-                    };
-                    
-                    Package { 
-                        name,
-                        version,
-                        origin,
-                        comment
-                    }
-                })
+                .map(|s| s.trim().to_string())
+                .collect::<Vec<String>>()
+        }
+        _ => return vec![],
+    };
+
+    if names.is_empty() {
+        return vec![];
+    }
+
+    // Get versions for all packages
+    let versions_output = if let Some(f) = filter {
+        Command::new("pkg")
+            .arg("query")
+            .arg(f)
+            .arg("%v")
+            .output()
+    } else {
+        Command::new("pkg")
+            .arg("query")
+            .arg("%v")
+            .output()
+    };
+    
+    let versions: Vec<String> = match versions_output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|s| s.trim().to_string())
                 .collect()
         }
-        _ => vec![],
-    }
+        _ => vec![String::new(); names.len()],
+    };
+
+    // Get origins
+    let origins_output = if let Some(f) = filter {
+        Command::new("pkg")
+            .arg("query")
+            .arg(f)
+            .arg("%o")
+            .output()
+    } else {
+        Command::new("pkg")
+            .arg("query")
+            .arg("%o")
+            .output()
+    };
+    
+    let origins: Vec<String> = match origins_output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|s| s.trim().to_string())
+                .collect()
+        }
+        _ => vec![String::new(); names.len()],
+    };
+
+    // Get comments
+    let comments_output = if let Some(f) = filter {
+        Command::new("pkg")
+            .arg("query")
+            .arg(f)
+            .arg("%c")
+            .output()
+    } else {
+        Command::new("pkg")
+            .arg("query")
+            .arg("%c")
+            .output()
+    };
+    
+    let comments: Vec<String> = match comments_output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|s| s.trim().to_string())
+                .collect()
+        }
+        _ => vec![String::new(); names.len()],
+    };
+
+    // Combine into Package structs
+    names.into_iter().enumerate().map(|(i, name)| {
+        Package {
+            name,
+            version: versions.get(i).cloned().unwrap_or_default(),
+            origin: origins.get(i).cloned().unwrap_or_default(),
+            comment: comments.get(i).cloned().unwrap_or_default(),
+        }
+    }).collect()
+}
+
+fn list_installed_packages() -> Vec<Package> {
+    list_packages_with_details(None)
 }
 
 fn list_orphan_packages() -> Vec<Package> {
-    let output = Command::new("pkg")
-        .arg("query")
-        .arg("%n-%v\t%o\t%c")
-        .arg("-a")
-        .output();
-
-    match output {
-        Ok(result) if result.status.success() => {
-            String::from_utf8_lossy(&result.stdout)
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| {
-                    let parts: Vec<&str> = line.split('\t').collect();
-                    let name_ver = parts.get(0).unwrap_or(&line);
-                    let origin = parts.get(1).unwrap_or(&"").to_string();
-                    let comment = parts.get(2).unwrap_or(&"").to_string();
-                    
-                    let name_parts: Vec<&str> = name_ver.split('-').collect();
-                    let name = name_parts.get(0).unwrap_or(&name_ver).to_string();
-                    let version = if name_parts.len() > 1 {
-                        name_parts[1..].join("-")
-                    } else {
-                        String::new()
-                    };
-                    
-                    Package { 
-                        name,
-                        version,
-                        origin,
-                        comment
-                    }
-                })
-                .collect()
-        }
-        _ => vec![],
-    }
+    list_packages_with_details(Some("-a"))
 }
 
 fn list_dependencies() -> Vec<Package> {
-    let output = Command::new("pkg")
-        .arg("query")
-        .arg("%n-%v\t%o\t%c")
-        .arg("-d")
-        .output();
-
-    match output {
-        Ok(result) if result.status.success() => {
-            String::from_utf8_lossy(&result.stdout)
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| {
-                    let parts: Vec<&str> = line.split('\t').collect();
-                    let name_ver = parts.get(0).unwrap_or(&line);
-                    let origin = parts.get(1).unwrap_or(&"").to_string();
-                    let comment = parts.get(2).unwrap_or(&"").to_string();
-                    
-                    let name_parts: Vec<&str> = name_ver.split('-').collect();
-                    let name = name_parts.get(0).unwrap_or(&name_ver).to_string();
-                    let version = if name_parts.len() > 1 {
-                        name_parts[1..].join("-")
-                    } else {
-                        String::new()
-                    };
-                    
-                    Package { 
-                        name,
-                        version,
-                        origin,
-                        comment
-                    }
-                })
-                .collect()
-        }
-        _ => vec![],
-    }
+    list_packages_with_details(Some("-d"))
 }
 
 fn create_package_row(package: &Package) -> Box {
