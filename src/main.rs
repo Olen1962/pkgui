@@ -259,6 +259,7 @@ fn main() -> glib::ExitCode {
         let package_list_clone = package_list.clone();
         let package_list_clone2 = package_list.clone();
         let package_list_clone3 = package_list.clone();
+        let package_list_clone4 = package_list.clone();
 
         refresh_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
@@ -277,7 +278,7 @@ fn main() -> glib::ExitCode {
 
         deps_btn.connect_clicked(move |_| {
             let packages = list_dependencies();
-            update_package_list(&package_list, packages);
+            update_package_list(&package_list_clone4, packages);
         });
 
         // Initial load
