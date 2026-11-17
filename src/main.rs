@@ -352,9 +352,9 @@ fn create_install_dialog(parent: &ApplicationWindow) {
     // State
     let selected_package = Arc::new(Mutex::new(None::<Package>));
     let scrolled_clone = scrolled.clone();
-    let status_clone = status_label.clone();
-    let install_btn_clone = install_btn.clone();
-    let selected_clone = selected_package.clone();
+    let status_label_for_search = status_label.clone();
+    let install_btn_for_search = install_btn.clone();
+    let selected_package_for_search = selected_package.clone();
 
     search_entry.connect_changed(move |entry| {
         let query = entry.text().to_string();
@@ -369,9 +369,9 @@ fn create_install_dialog(parent: &ApplicationWindow) {
             label.add_css_class("dim-label");
             empty_box.append(&label);
             scrolled_clone.set_child(Some(&empty_box));
-            status_clone.set_text("Enter a package name to search");
-            install_btn_clone.set_sensitive(false);
-            *selected_clone.lock().unwrap() = None;
+            status_label_for_search.set_text("Enter a package name to search");
+            install_btn_for_search.set_sensitive(false);
+            *selected_package_for_search.lock().unwrap() = None;
             return;
         }
 
@@ -388,9 +388,9 @@ fn create_install_dialog(parent: &ApplicationWindow) {
             label.add_css_class("dim-label");
             empty_box.append(&label);
             scrolled_clone.set_child(Some(&empty_box));
-            status_clone.set_text("No packages found");
-            install_btn_clone.set_sensitive(false);
-            *selected_clone.lock().unwrap() = None;
+            status_label_for_search.set_text("No packages found");
+            install_btn_for_search.set_sensitive(false);
+            *selected_package_for_search.lock().unwrap() = None;
             return;
         }
 
@@ -454,16 +454,16 @@ fn create_install_dialog(parent: &ApplicationWindow) {
             row_box.set_halign(Align::Fill);
             row_box.set_vexpand(false);
             
-            let selected_clone2 = selected_package.clone();
-            let install_btn_clone2 = install_btn.clone();
-            let status_clone2 = status_label.clone();
-            let pkg_clone = pkg.clone();
+            let selected_for_row = selected_package_for_search.clone();
+            let install_btn_for_row = install_btn_for_search.clone();
+            let status_for_row = status_label_for_search.clone();
+            let pkg_for_row = pkg.clone();
             
             let gesture = GestureClick::new();
             gesture.connect_pressed(move |_, _, _, _| {
-                *selected_clone2.lock().unwrap() = Some(pkg_clone.clone());
-                install_btn_clone2.set_sensitive(true);
-                status_clone2.set_text(&format!("Selected: {}", pkg_clone.name));
+                *selected_for_row.lock().unwrap() = Some(pkg_for_row.clone());
+                install_btn_for_row.set_sensitive(true);
+                status_for_row.set_text(&format!("Selected: {}", pkg_for_row.name));
             });
             row_box.add_controller(gesture);
             
@@ -473,23 +473,23 @@ fn create_install_dialog(parent: &ApplicationWindow) {
 
         outer_box.append(&grid);
         scrolled_clone.set_child(Some(&outer_box));
-        status_clone.set_text(&format!("Found {} packages", packages.len()));
+        status_label_for_search.set_text(&format!("Found {} packages", packages.len()));
     });
 
     let dialog_clone = dialog.clone();
-    let selected_clone2 = selected_package.clone();
-    let status_clone2 = status_label.clone();
+    let selected_for_install = selected_package_for_search.clone();
+    let status_for_install = status_label_for_search.clone();
+    let install_btn_for_install = install_btn_for_search.clone();
     
-    install_btn.connect_clicked(move |_| {
-        if let Some(pkg) = selected_clone2.lock().unwrap().as_ref() {
+    install_btn_for_install.connect_clicked(move |_| {
+        if let Some(pkg) = selected_for_install.lock().unwrap().as_ref() {
             match install_package(&pkg.name) {
                 Ok(msg) => {
-                    status_clone2.set_text(&msg);
-                    // Close dialog after successful install
+                    status_for_install.set_text(&msg);
                     dialog_clone.close();
                 }
                 Err(err) => {
-                    status_clone2.set_text(&format!("Error: {}", err));
+                    status_for_install.set_text(&format!("Error: {}", err));
                 }
             }
         }
@@ -646,7 +646,6 @@ fn main() -> glib::ExitCode {
         let current_category = Arc::new(Mutex::new("Installed Packages".to_string()));
         let all_packages = Arc::new(Mutex::new(list_installed_packages()));
         
-        let search_entry_clone = search_entry.clone();
         let scrolled_for_search = scrolled.clone();
         let all_packages_for_search = all_packages.clone();
         let current_category_for_search = current_category.clone();
