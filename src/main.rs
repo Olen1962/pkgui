@@ -75,7 +75,10 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
         .build();
 
     let main_box = Box::new(gtk4::Orientation::Vertical, 24);
-    main_box.set_margin_all(24);
+    main_box.set_margin_top(24);
+    main_box.set_margin_bottom(24);
+    main_box.set_margin_start(24);
+    main_box.set_margin_end(24);
     dialog.set_child(Some(&main_box));
 
     // Theme section
@@ -97,7 +100,7 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
     lang_label.set_halign(gtk4::Align::Start);
     main_box.append(&lang_label);
 
-    let lang_combo = gtk4::DropDown::new_from_strings(&["System", "English", "Portuguese"]);
+    let lang_combo = gtk4::DropDown::from_strings(&["System", "English", "Portuguese"]);
     main_box.append(&lang_combo);
 
     // OK button
@@ -137,7 +140,10 @@ fn main() -> glib::ExitCode {
 
         // ===== TOP BAR =====
         let top_bar = Box::new(gtk4::Orientation::Horizontal, 12);
-        top_bar.set_margin_all(12);
+        top_bar.set_margin_top(12);
+        top_bar.set_margin_bottom(12);
+        top_bar.set_margin_start(12);
+        top_bar.set_margin_end(12);
 
         let search_entry = Entry::builder()
             .placeholder_text("Software search")
@@ -156,7 +162,10 @@ fn main() -> glib::ExitCode {
 
         // ===== SIDEBAR =====
         let sidebar = Box::new(gtk4::Orientation::Vertical, 6);
-        sidebar.set_margin_all(12);
+        sidebar.set_margin_top(12);
+        sidebar.set_margin_bottom(12);
+        sidebar.set_margin_start(12);
+        sidebar.set_margin_end(12);
         sidebar.set_width_request(150);
         content_box.append(&sidebar);
 
@@ -185,7 +194,10 @@ fn main() -> glib::ExitCode {
 
         // ===== BOTTOM BAR =====
         let bottom_bar = Box::new(gtk4::Orientation::Horizontal, 12);
-        bottom_bar.set_margin_all(12);
+        bottom_bar.set_margin_top(12);
+        bottom_bar.set_margin_bottom(12);
+        bottom_bar.set_margin_start(12);
+        bottom_bar.set_margin_end(12);
         bottom_bar.set_halign(gtk4::Align::End);
 
         let prefs_btn = Button::with_label("Preferences");
