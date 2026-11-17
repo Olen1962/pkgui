@@ -175,7 +175,10 @@ fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &s
 
     // Add header with count
     let header_box = Box::new(gtk4::Orientation::Horizontal, 0);
-    header_box.set_margin_all(12);
+    header_box.set_margin_top(12);
+    header_box.set_margin_bottom(12);
+    header_box.set_margin_start(12);
+    header_box.set_margin_end(12);
     let count_label = Label::new(Some(&format!("{} ({} packages)", title, packages.len())));
     count_label.add_css_class("title-2");
     header_box.append(&count_label);
