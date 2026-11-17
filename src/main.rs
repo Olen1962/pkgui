@@ -29,7 +29,10 @@ fn list_installed_packages() -> Vec<Package> {
 
 fn create_package_row(package: &Package) -> Box {
     let row_box = Box::new(gtk4::Orientation::Horizontal, 12);
-    row_box.set_margin_all(12);
+    row_box.set_margin_top(12);
+    row_box.set_margin_bottom(12);
+    row_box.set_margin_start(12);
+    row_box.set_margin_end(12);
 
     let name_label = Label::new(Some(&package.name));
     name_label.set_halign(gtk4::Align::Start);
@@ -58,7 +61,10 @@ fn update_package_list(package_list: &ListBox) {
     if package_list.first_child().is_none() {
         let no_packages = Label::new(Some("No packages found. Run 'pkg install' to add packages."));
         no_packages.set_halign(gtk4::Align::Center);
-        no_packages.set_margin_all(24);
+        no_packages.set_margin_top(24);
+        no_packages.set_margin_bottom(24);
+        no_packages.set_margin_start(24);
+        no_packages.set_margin_end(24);
         package_list.append(&no_packages);
     }
 }
