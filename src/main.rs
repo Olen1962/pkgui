@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Label, ListBox, ScrolledWindow, Separator};
+use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Grid, Label, ListBox, ScrolledWindow, Separator};
 use libadwaita::{HeaderBar, WindowTitle};
 use std::process::Command;
 
@@ -153,78 +153,96 @@ fn list_dependencies() -> Vec<Package> {
     }
 }
 
-fn create_package_row(package: &Package) -> Box {
-    let row_box = Box::new(gtk4::Orientation::Horizontal, 12);
-    row_box.set_margin_top(4);
-    row_box.set_margin_bottom(4);
-    row_box.set_margin_start(12);
-    row_box.set_margin_end(12);
-
-    // Name column (40%)
+fn create_package_row(package: &Package) -> Grid {
+    let grid = Grid::new();
+    grid.set_margin_top(2);
+    grid.set_margin_bottom(2);
+    grid.set_margin_start(12);
+    grid.set_margin_end(12);
+    
+    // Column 0: Name
     let name_label = Label::new(Some(&package.name));
     name_label.set_halign(gtk4::Align::Start);
     name_label.set_hexpand(true);
-    name_label.set_width_request(200);
-    row_box.append(&name_label);
+    name_label.set_xalign(0.0);
+    grid.attach(&name_label, 0, 0, 1, 1);
 
-    // Version column (15%)
+    // Column 1: Version
     let version_label = Label::new(Some(&package.version));
     version_label.set_halign(gtk4::Align::Start);
-    version_label.set_width_request(100);
-    row_box.append(&version_label);
+    version_label.set_hexpand(false);
+    version_label.set_xalign(0.0);
+    grid.attach(&version_label, 1, 0, 1, 1);
 
-    // Origin column (25%)
+    // Column 2: Origin
     let origin_label = Label::new(Some(&package.origin));
     origin_label.set_halign(gtk4::Align::Start);
+    origin_label.set_hexpand(true);
+    origin_label.set_xalign(0.0);
     origin_label.add_css_class("dim-label");
-    origin_label.set_width_request(150);
-    row_box.append(&origin_label);
+    grid.attach(&origin_label, 2, 0, 1, 1);
 
-    // Comment column (20%)
+    // Column 3: Comment
     let comment_label = Label::new(Some(&package.comment));
     comment_label.set_halign(gtk4::Align::Start);
+    comment_label.set_hexpand(true);
+    comment_label.set_xalign(0.0);
     comment_label.add_css_class("dim-label");
     comment_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-    comment_label.set_width_request(200);
-    row_box.append(&comment_label);
+    grid.attach(&comment_label, 3, 0, 1, 1);
 
-    row_box
+    // Set column widths
+    grid.insert_column(0);
+    grid.insert_column(1);
+    grid.insert_column(2);
+    grid.insert_column(3);
+    
+    grid
 }
 
-fn create_header_row() -> Box {
-    let header_box = Box::new(gtk4::Orientation::Horizontal, 12);
-    header_box.set_margin_top(8);
-    header_box.set_margin_bottom(8);
-    header_box.set_margin_start(12);
-    header_box.set_margin_end(12);
-    header_box.add_css_class("header-row");
+fn create_header_row() -> Grid {
+    let grid = Grid::new();
+    grid.set_margin_top(4);
+    grid.set_margin_bottom(4);
+    grid.set_margin_start(12);
+    grid.set_margin_end(12);
+    grid.add_css_class("header-row");
 
     let name_label = Label::new(Some("Name"));
     name_label.set_halign(gtk4::Align::Start);
     name_label.set_hexpand(true);
-    name_label.set_width_request(200);
+    name_label.set_xalign(0.0);
     name_label.add_css_class("title-4");
-    header_box.append(&name_label);
+    grid.attach(&name_label, 0, 0, 1, 1);
 
     let version_label = Label::new(Some("Version"));
     version_label.set_halign(gtk4::Align::Start);
-    version_label.set_width_request(100);
+    version_label.set_hexpand(false);
+    version_label.set_xalign(0.0);
     version_label.add_css_class("title-4");
-    header_box.append(&version_label);
+    grid.attach(&version_label, 1, 0, 1, 1);
 
     let origin_label = Label::new(Some("Origin"));
     origin_label.set_halign(gtk4::Align::Start);
-    origin_label.set_width_request(150);
+    origin_label.set_hexpand(true);
+    origin_label.set_xalign(0.0);
     origin_label.add_css_class("title-4");
-    header_box.append(&origin_label);
+    grid.attach(&origin_label, 2, 0, 1, 1);
 
     let comment_label = Label::new(Some("Description"));
     comment_label.set_halign(gtk4::Align::Start);
-    comment_label.set_width_request(200);
+    comment_label.set_hexpand(true);
+    comment_label.set_xalign(0.0);
     comment_label.add_css_class("title-4");
-    header_box.append(&comment_label);
+    grid.attach(&comment_label, 3, 0, 1, 1);
 
-    header_box
+    // Set column widths
+    grid.insert_column(0);
+    grid.insert_column(1);
+    grid.insert_column(2);
+    grid.insert_column(3);
+    
+    grid
 }
 
 fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &str) {
