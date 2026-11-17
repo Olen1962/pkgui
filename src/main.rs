@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Grid, Label, ScrolledWindow, Separator, Align};
+use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Grid, Label, ListBox, ScrolledWindow, Separator, Align};
 use libadwaita::{HeaderBar, WindowTitle};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -155,6 +155,65 @@ fn list_dependencies() -> Vec<Package> {
     }
 }
 
+fn search_available_packages(query: &str) -> Vec<Package> {
+    if query.trim().is_empty() {
+        return vec![];
+    }
+    
+    let output = Command::new("pkg")
+        .arg("search")
+        .arg(query)
+        .arg("-F")
+        .arg("%n\t%v\t%o\t%c")
+        .output();
+
+    match output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| {
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    Package {
+                        name: parts.get(0).unwrap_or(&"").to_string(),
+                        version: parts.get(1).unwrap_or(&"").to_string(),
+                        origin: parts.get(2).unwrap_or(&"").to_string(),
+                        comment: parts.get(3).unwrap_or(&"").to_string(),
+                    }
+                })
+                .collect()
+        }
+        Ok(result) => {
+            eprintln!("pkg search stderr: {}", String::from_utf8_lossy(&result.stderr));
+            vec![]
+        }
+        Err(e) => {
+            eprintln!("pkg search error: {}", e);
+            vec![]
+        }
+    }
+}
+
+fn install_package(package_name: &str) -> Result<String, String> {
+    let output = Command::new("pkg")
+        .arg("install")
+        .arg("-y")
+        .arg(package_name)
+        .output();
+
+    match output {
+        Ok(result) if result.status.success() => {
+            Ok(format!("Package {} installed successfully", package_name))
+        }
+        Ok(result) => {
+            Err(String::from_utf8_lossy(&result.stderr).to_string())
+        }
+        Err(e) => {
+            Err(format!("Failed to install package: {}", e))
+        }
+    }
+}
+
 fn filter_packages(packages: &[Package], search_text: &str) -> Vec<Package> {
     if search_text.is_empty() {
         return packages.to_vec();
@@ -247,6 +306,184 @@ fn update_package_list(scrolled: &ScrolledWindow, packages: Vec<Package>, title:
 
     outer_box.append(&grid);
     scrolled.set_child(Some(&outer_box));
+}
+
+fn create_install_dialog(parent: &ApplicationWindow) {
+    let dialog = gtk4::Window::builder()
+        .title("Install Package")
+        .transient_for(parent)
+        .modal(true)
+        .default_width(600)
+        .default_height(500)
+        .build();
+
+    let main_box = Box::new(gtk4::Orientation::Vertical, 12);
+    main_box.set_margin_all(12);
+    dialog.set_child(Some(&main_box));
+
+    // Search entry
+    let search_entry = Entry::builder()
+        .placeholder_text("Search for packages...")
+        .hexpand(true)
+        .build();
+    main_box.append(&search_entry);
+
+    // Results area
+    let scrolled = ScrolledWindow::new();
+    scrolled.set_vexpand(true);
+    scrolled.set_hexpand(true);
+    main_box.append(&scrolled);
+
+    // Status label
+    let status_label = Label::new(Some("Enter a package name to search"));
+    status_label.set_halign(Align::Start);
+    status_label.add_css_class("dim-label");
+    main_box.append(&status_label);
+
+    // Install button (disabled by default)
+    let install_btn = Button::with_label("Install");
+    install_btn.set_sensitive(false);
+    install_btn.set_halign(Align::End);
+    main_box.append(&install_btn);
+
+    // State
+    let selected_package = Arc::new(Mutex::new(None::<Package>));
+    let scrolled_clone = scrolled.clone();
+    let status_clone = status_label.clone();
+    let install_btn_clone = install_btn.clone();
+    let selected_clone = selected_package.clone();
+
+    search_entry.connect_changed(move |entry| {
+        let query = entry.text().to_string();
+        if query.trim().is_empty() {
+            let empty_box = Box::new(gtk4::Orientation::Vertical, 0);
+            empty_box.set_margin_all(24);
+            let label = Label::new(Some("Enter a package name to search"));
+            label.set_halign(Align::Center);
+            label.add_css_class("dim-label");
+            empty_box.append(&label);
+            scrolled_clone.set_child(Some(&empty_box));
+            status_clone.set_text("Enter a package name to search");
+            install_btn_clone.set_sensitive(false);
+            *selected_clone.lock().unwrap() = None;
+            return;
+        }
+
+        let packages = search_available_packages(&query);
+        
+        if packages.is_empty() {
+            let empty_box = Box::new(gtk4::Orientation::Vertical, 0);
+            empty_box.set_margin_all(24);
+            let label = Label::new(Some("No packages found"));
+            label.set_halign(Align::Center);
+            label.add_css_class("dim-label");
+            empty_box.append(&label);
+            scrolled_clone.set_child(Some(&empty_box));
+            status_clone.set_text("No packages found");
+            install_btn_clone.set_sensitive(false);
+            *selected_clone.lock().unwrap() = None;
+            return;
+        }
+
+        // Create grid for results
+        let outer_box = Box::new(gtk4::Orientation::Vertical, 0);
+        outer_box.set_margin_all(12);
+
+        let grid = Grid::new();
+        grid.set_column_spacing(24);
+        grid.set_row_spacing(8);
+
+        let headers = ["Name", "Version", "Origin", "Description"];
+        for (col, text) in headers.iter().enumerate() {
+            let label = Label::new(Some(text));
+            label.set_halign(Align::Start);
+            label.set_xalign(0.0);
+            label.add_css_class("title-4");
+            if col == 3 {
+                label.set_hexpand(true);
+            }
+            grid.attach(&label, col as i32, 0, 1, 1);
+        }
+
+        let sep = Separator::new(gtk4::Orientation::Horizontal);
+        sep.set_margin_top(4);
+        sep.set_margin_bottom(8);
+        grid.attach(&sep, 0, 1, 4, 1);
+
+        for (i, pkg) in packages.iter().enumerate() {
+            let row_idx = (i + 2) as i32;
+
+            let name_label = Label::new(Some(&pkg.name));
+            name_label.set_halign(Align::Start);
+            name_label.set_xalign(0.0);
+            grid.attach(&name_label, 0, row_idx, 1, 1);
+
+            let version_label = Label::new(Some(&pkg.version));
+            version_label.set_halign(Align::Start);
+            version_label.set_xalign(0.0);
+            grid.attach(&version_label, 1, row_idx, 1, 1);
+
+            let origin_label = Label::new(Some(&pkg.origin));
+            origin_label.set_halign(Align::Start);
+            origin_label.set_xalign(0.0);
+            origin_label.add_css_class("dim-label");
+            grid.attach(&origin_label, 2, row_idx, 1, 1);
+
+            let comment_label = Label::new(Some(&pkg.comment));
+            comment_label.set_halign(Align::Start);
+            comment_label.set_xalign(0.0);
+            comment_label.add_css_class("dim-label");
+            comment_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+            comment_label.set_hexpand(true);
+            grid.attach(&comment_label, 3, row_idx, 1, 1);
+
+            // Make the entire row clickable
+            let row_box = Box::new(gtk4::Orientation::Horizontal, 0);
+            row_box.set_halign(Align::Fill);
+            row_box.set_vexpand(false);
+            
+            let name_clone = name_label.clone();
+            let version_clone = version_label.clone();
+            let origin_clone = origin_label.clone();
+            let comment_clone = comment_label.clone();
+            let selected_clone2 = selected_package.clone();
+            let install_btn_clone2 = install_btn.clone();
+            
+            row_box.connect_clicked(move |_| {
+                *selected_clone2.lock().unwrap() = Some(pkg.clone());
+                install_btn_clone2.set_sensitive(true);
+                status_clone.set_text(&format!("Selected: {}", pkg.name));
+            });
+            
+            // Add row to grid
+            grid.attach(&row_box, 0, row_idx, 4, 1);
+        }
+
+        outer_box.append(&grid);
+        scrolled_clone.set_child(Some(&outer_box));
+        status_clone.set_text(&format!("Found {} packages", packages.len()));
+    });
+
+    let dialog_clone = dialog.clone();
+    let selected_clone2 = selected_package.clone();
+    let status_clone2 = status_label.clone();
+    
+    install_btn.connect_clicked(move |_| {
+        if let Some(pkg) = selected_clone2.lock().unwrap().as_ref() {
+            match install_package(&pkg.name) {
+                Ok(msg) => {
+                    status_clone2.set_text(&msg);
+                    // Close dialog after successful install
+                    dialog_clone.close();
+                }
+                Err(err) => {
+                    status_clone2.set_text(&format!("Error: {}", err));
+                }
+            }
+        }
+    });
+
+    dialog.show();
 }
 
 fn create_preferences_dialog(parent: &ApplicationWindow) {
@@ -368,6 +605,11 @@ fn main() -> glib::ExitCode {
         let window_clone2 = window.clone();
         prefs_btn.connect_clicked(move |_| {
             create_preferences_dialog(&window_clone2);
+        });
+
+        let window_clone3 = window.clone();
+        install_btn.connect_clicked(move |_| {
+            create_install_dialog(&window_clone3);
         });
 
         sidebar.append(&prefs_btn);
