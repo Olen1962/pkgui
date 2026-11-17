@@ -12,7 +12,8 @@ struct Package {
 
 fn list_installed_packages() -> Vec<Package> {
     let output = Command::new("pkg")
-        .arg("info")
+        .arg("query")
+        .arg("%n\t%v\t%o\t%c")
         .output();
 
     match output {
@@ -21,36 +22,22 @@ fn list_installed_packages() -> Vec<Package> {
                 .lines()
                 .filter(|line| !line.trim().is_empty())
                 .map(|line| {
-                    // Format: "name-version\t  description" or "name-version    description"
-                    let trimmed = line.trim();
-                    let parts: Vec<&str> = trimmed.splitn(2, char::is_whitespace).collect();
-                    if parts.len() >= 1 {
-                        // Split name and version
-                        let name_ver = parts[0];
-                        let name_parts: Vec<&str> = name_ver.split('-').collect();
-                        Package {
-                            name: name_parts.get(0).unwrap_or(&name_ver).to_string(),
-                            version: if name_parts.len() > 1 { name_parts[1..].join("-") } else { String::new() },
-                            origin: String::new(),
-                            comment: parts.get(1).map(|s| s.trim().to_string()).unwrap_or_default(),
-                        }
-                    } else {
-                        Package {
-                            name: String::new(),
-                            version: String::new(),
-                            origin: String::new(),
-                            comment: String::new(),
-                        }
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    Package {
+                        name: parts.get(0).unwrap_or(&"").to_string(),
+                        version: parts.get(1).unwrap_or(&"").to_string(),
+                        origin: parts.get(2).unwrap_or(&"").to_string(),
+                        comment: parts.get(3).unwrap_or(&"").to_string(),
                     }
                 })
                 .collect()
         }
         Ok(result) => {
-            eprintln!("pkg info stderr: {}", String::from_utf8_lossy(&result.stderr));
+            eprintln!("pkg query stderr: {}", String::from_utf8_lossy(&result.stderr));
             vec![]
         }
         Err(e) => {
-            eprintln!("pkg info error: {}", e);
+            eprintln!("pkg query error: {}", e);
             vec![]
         }
     }
@@ -70,13 +57,6 @@ fn list_orphan_packages() -> Vec<Package> {
 
             for line in stdout.lines() {
                 let trimmed = line.trim();
-                if trimmed.starts_with("Checking") || 
-                   trimmed.starts_with("Deinstallation") ||
-                   trimmed.starts_with("Number of") ||
-                   trimmed.starts_with("The operation") ||
-                   trimmed.starts_with("Database") {
-                    continue;
-                }
                 if trimmed.starts_with("Installed packages to be REMOVED:") {
                     in_list = true;
                     continue;
@@ -86,11 +66,10 @@ fn list_orphan_packages() -> Vec<Package> {
                         in_list = false;
                         continue;
                     }
-                    // Format: "\tname: version" or "name: version"
                     let clean = trimmed.trim_start_matches('\t').trim();
                     if !clean.is_empty() {
                         let parts: Vec<&str> = clean.splitn(2, ':').collect();
-                        if parts.len() >= 1 {
+                        if !parts.is_empty() {
                             names.push(parts[0].trim().to_string());
                         }
                     }
@@ -101,42 +80,26 @@ fn list_orphan_packages() -> Vec<Package> {
                 return vec![];
             }
 
-            // Get details for each orphan package
             let mut packages = Vec::new();
             for name in names {
-                let output = Command::new("pkg")
-                    .arg("info")
-                    .arg(&name)
+                let query_out = Command::new("pkg")
+                    .arg("query")
+                    .arg("-e")
+                    .arg(&format!("%n = '{}'", name))
+                    .arg("%n\t%v\t%o\t%c")
                     .output();
 
-                if let Ok(result) = output {
-                    if result.status.success() {
-                        let stdout = String::from_utf8_lossy(&result.stdout);
-                        for pkg_line in stdout.lines() {
-                            let trimmed = pkg_line.trim();
-                            if trimmed.starts_with(&format!("{}:", name)) || trimmed == name {
-                                let name_ver = trimmed.trim_end_matches(':').trim();
-                                let name_parts: Vec<&str> = name_ver.split('-').collect();
-                                let mut pkg = Package {
-                                    name: name.clone(),
-                                    version: if name_parts.len() > 1 { name_parts[1..].join("-") } else { String::new() },
-                                    origin: String::new(),
-                                    comment: String::new(),
-                                };
-
-                                // Get next lines for details
-                                for detail_line in stdout.lines().skip_while(|l| !l.trim().starts_with(&format!("{}:", name)) && l.trim() != name) {
-                                    let dtrimmed = detail_line.trim();
-                                    if dtrimmed.starts_with("Origin :") {
-                                        pkg.origin = dtrimmed.trim_start_matches("Origin :").trim().to_string();
-                                    } else if dtrimmed.starts_with("Comment :") {
-                                        pkg.comment = dtrimmed.trim_start_matches("Comment :").trim().to_string();
-                                    } else if dtrimmed.starts_with("Version :") && pkg.version.is_empty() {
-                                        pkg.version = dtrimmed.trim_start_matches("Version :").trim().to_string();
-                                    }
-                                }
-                                packages.push(pkg);
-                                break;
+                if let Ok(res) = query_out {
+                    if res.status.success() {
+                        for line in String::from_utf8_lossy(&res.stdout).lines() {
+                            let parts: Vec<&str> = line.split('\t').collect();
+                            if !parts.is_empty() {
+                                packages.push(Package {
+                                    name: parts.get(0).unwrap_or(&"").to_string(),
+                                    version: parts.get(1).unwrap_or(&"").to_string(),
+                                    origin: parts.get(2).unwrap_or(&"").to_string(),
+                                    comment: parts.get(3).unwrap_or(&"").to_string(),
+                                });
                             }
                         }
                     }
@@ -221,7 +184,7 @@ fn create_package_row(package: &Package) -> Box {
     let comment_label = Label::new(Some(&package.comment));
     comment_label.set_halign(gtk4::Align::Start);
     comment_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-    comment_label.set_max_width_chars(40);
+    comment_label.set_max_width_chars(50);
     bottom_row.append(&comment_label);
     row_box.append(&bottom_row);
 
@@ -291,13 +254,6 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
     theme_box.append(&system_btn);
     main_box.append(&theme_box);
 
-    let lang_label = Label::new(Some("Language:"));
-    lang_label.set_halign(gtk4::Align::Start);
-    main_box.append(&lang_label);
-
-    let lang_combo = gtk4::DropDown::from_strings(&["System", "English", "Portuguese"]);
-    main_box.append(&lang_combo);
-
     let ok_btn = Button::with_label("OK");
     ok_btn.set_halign(gtk4::Align::End);
     let dialog_clone = dialog.clone();
@@ -349,6 +305,7 @@ fn main() -> glib::ExitCode {
         main_box.append(&top_bar);
 
         let content_box = Box::new(gtk4::Orientation::Horizontal, 0);
+        content_box.set_vexpand(true);
         main_box.append(&content_box);
 
         let sidebar = Box::new(gtk4::Orientation::Vertical, 6);
@@ -394,9 +351,12 @@ fn main() -> glib::ExitCode {
 
         let package_area = Box::new(gtk4::Orientation::Vertical, 0);
         package_area.set_hexpand(true);
+        package_area.set_vexpand(true);
         content_box.append(&package_area);
 
         let scrolled = ScrolledWindow::new();
+        scrolled.set_vexpand(true);
+        scrolled.set_hexpand(true);
         let package_list = ListBox::new();
         package_list.set_selection_mode(gtk4::SelectionMode::None);
         scrolled.set_child(Some(&package_list));
