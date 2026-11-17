@@ -25,13 +25,20 @@ fn run_pkg_query(args: &[&str]) -> Vec<Vec<String>> {
                 })
                 .collect()
         }
-        _ => vec![],
+        Ok(result) => {
+            eprintln!("pkg query stderr: {}", String::from_utf8_lossy(&result.stderr));
+            vec![]
+        }
+        Err(e) => {
+            eprintln!("pkg query error: {}", e);
+            vec![]
+        }
     }
 }
 
 fn list_installed_packages() -> Vec<Package> {
-    // Use pkg query with tab-separated fields: name, version, origin, comment
-    let lines = run_pkg_query(&["query", "%n\t%v\t%o\t%c"]);
+    // -e flag for installed packages only
+    let lines = run_pkg_query(&["query", "-e", "%n\t%v\t%o\t%c"]);
     
     lines.into_iter().map(|parts| {
         Package {
@@ -58,8 +65,8 @@ fn list_orphan_packages() -> Vec<Package> {
 }
 
 fn list_dependencies() -> Vec<Package> {
-    // -d flag for dependencies
-    let lines = run_pkg_query(&["query", "-d", "%n\t%v\t%o\t%c"]);
+    // -d flag for dependencies, but also need -e to show only installed
+    let lines = run_pkg_query(&["query", "-d", "-e", "%n\t%v\t%o\t%c"]);
     
     lines.into_iter().map(|parts| {
         Package {
