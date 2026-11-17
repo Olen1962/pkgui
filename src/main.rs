@@ -6,12 +6,15 @@ use std::process::Command;
 struct Package {
     name: String,
     version: String,
+    origin: String,
+    comment: String,
 }
 
 fn list_installed_packages() -> Vec<Package> {
+    // Get package list with name, version, origin, comment
     let output = Command::new("pkg")
         .arg("query")
-        .arg("%n-%v")
+        .arg("%n-%v\t%o\t%c")
         .output();
 
     match output {
@@ -20,10 +23,26 @@ fn list_installed_packages() -> Vec<Package> {
                 .lines()
                 .filter(|line| !line.trim().is_empty())
                 .map(|line| {
-                    let parts: Vec<&str> = line.trim().split('-').collect();
-                    let name = parts.get(0).unwrap_or(&line).to_string();
-                    let version = parts.get(1).unwrap_or(&"").to_string();
-                    Package { name, version }
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    let name_ver = parts.get(0).unwrap_or(&line);
+                    let origin = parts.get(1).unwrap_or(&"").to_string();
+                    let comment = parts.get(2).unwrap_or(&"").to_string();
+                    
+                    // Split name and version
+                    let name_parts: Vec<&str> = name_ver.split('-').collect();
+                    let name = name_parts.get(0).unwrap_or(&name_ver).to_string();
+                    let version = if name_parts.len() > 1 {
+                        name_parts[1..].join("-")
+                    } else {
+                        String::new()
+                    };
+                    
+                    Package { 
+                        name,
+                        version,
+                        origin,
+                        comment
+                    }
                 })
                 .collect()
         }
@@ -34,7 +53,7 @@ fn list_installed_packages() -> Vec<Package> {
 fn list_orphan_packages() -> Vec<Package> {
     let output = Command::new("pkg")
         .arg("query")
-        .arg("%n-%v")
+        .arg("%n-%v\t%o\t%c")
         .arg("-a")
         .output();
 
@@ -44,10 +63,25 @@ fn list_orphan_packages() -> Vec<Package> {
                 .lines()
                 .filter(|line| !line.trim().is_empty())
                 .map(|line| {
-                    let parts: Vec<&str> = line.trim().split('-').collect();
-                    let name = parts.get(0).unwrap_or(&line).to_string();
-                    let version = parts.get(1).unwrap_or(&"").to_string();
-                    Package { name, version }
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    let name_ver = parts.get(0).unwrap_or(&line);
+                    let origin = parts.get(1).unwrap_or(&"").to_string();
+                    let comment = parts.get(2).unwrap_or(&"").to_string();
+                    
+                    let name_parts: Vec<&str> = name_ver.split('-').collect();
+                    let name = name_parts.get(0).unwrap_or(&name_ver).to_string();
+                    let version = if name_parts.len() > 1 {
+                        name_parts[1..].join("-")
+                    } else {
+                        String::new()
+                    };
+                    
+                    Package { 
+                        name,
+                        version,
+                        origin,
+                        comment
+                    }
                 })
                 .collect()
         }
@@ -58,7 +92,7 @@ fn list_orphan_packages() -> Vec<Package> {
 fn list_dependencies() -> Vec<Package> {
     let output = Command::new("pkg")
         .arg("query")
-        .arg("%n-%v")
+        .arg("%n-%v\t%o\t%c")
         .arg("-d")
         .output();
 
@@ -68,10 +102,25 @@ fn list_dependencies() -> Vec<Package> {
                 .lines()
                 .filter(|line| !line.trim().is_empty())
                 .map(|line| {
-                    let parts: Vec<&str> = line.trim().split('-').collect();
-                    let name = parts.get(0).unwrap_or(&line).to_string();
-                    let version = parts.get(1).unwrap_or(&"").to_string();
-                    Package { name, version }
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    let name_ver = parts.get(0).unwrap_or(&line);
+                    let origin = parts.get(1).unwrap_or(&"").to_string();
+                    let comment = parts.get(2).unwrap_or(&"").to_string();
+                    
+                    let name_parts: Vec<&str> = name_ver.split('-').collect();
+                    let name = name_parts.get(0).unwrap_or(&name_ver).to_string();
+                    let version = if name_parts.len() > 1 {
+                        name_parts[1..].join("-")
+                    } else {
+                        String::new()
+                    };
+                    
+                    Package { 
+                        name,
+                        version,
+                        origin,
+                        comment
+                    }
                 })
                 .collect()
         }
@@ -80,36 +129,70 @@ fn list_dependencies() -> Vec<Package> {
 }
 
 fn create_package_row(package: &Package) -> Box {
-    let row_box = Box::new(gtk4::Orientation::Horizontal, 12);
+    let row_box = Box::new(gtk4::Orientation::Vertical, 4);
     row_box.set_margin_top(8);
     row_box.set_margin_bottom(8);
     row_box.set_margin_start(12);
     row_box.set_margin_end(12);
 
+    // Top row: Name + Version
+    let top_row = Box::new(gtk4::Orientation::Horizontal, 12);
+    
     let name_label = Label::new(Some(&package.name));
     name_label.set_halign(gtk4::Align::Start);
     name_label.set_hexpand(true);
     name_label.add_css_class("title-3");
-    row_box.append(&name_label);
+    top_row.append(&name_label);
 
     let version_label = Label::new(Some(&package.version));
     version_label.set_halign(gtk4::Align::End);
-    row_box.append(&version_label);
+    top_row.append(&version_label);
+    row_box.append(&top_row);
+
+    // Bottom row: Origin + Comment
+    let bottom_row = Box::new(gtk4::Orientation::Horizontal, 12);
+    
+    let origin_label = Label::new(Some(&package.origin));
+    origin_label.set_halign(gtk4::Align::Start);
+    origin_label.add_css_class("dim-label");
+    origin_label.set_hexpand(true);
+    bottom_row.append(&origin_label);
+
+    let comment_label = Label::new(Some(&package.comment));
+    comment_label.set_halign(gtk4::Align::Start);
+    comment_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+    comment_label.set_max_width_chars(40);
+    bottom_row.append(&comment_label);
+    row_box.append(&bottom_row);
 
     row_box
 }
 
-fn update_package_list(package_list: &ListBox, packages: Vec<Package>) {
+fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &str) {
     while let Some(child) = package_list.first_child() {
         package_list.remove(&child);
     }
+
+    // Add header with count
+    let header_box = Box::new(gtk4::Orientation::Horizontal, 0);
+    header_box.set_margin_all(12);
+    let count_label = Label::new(Some(&format!("{} ({} packages)", title, packages.len())));
+    count_label.add_css_class("title-2");
+    header_box.append(&count_label);
+    package_list.append(&header_box);
+
+    // Separator
+    let sep = Separator::new(gtk4::Orientation::Horizontal);
+    sep.set_margin_start(12);
+    sep.set_margin_end(12);
+    package_list.append(&sep);
 
     for pkg in packages {
         let row = create_package_row(&pkg);
         package_list.append(&row);
     }
 
-    if package_list.first_child().is_none() {
+    if packages.is_empty() {
         let no_packages = Label::new(Some("No packages found."));
         no_packages.set_halign(gtk4::Align::Center);
         no_packages.set_margin_top(24);
@@ -273,27 +356,27 @@ fn main() -> glib::ExitCode {
 
         refresh_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
-            update_package_list(&package_list_clone, packages);
+            update_package_list(&package_list_clone, packages, "Installed Packages");
         });
 
         installed_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
-            update_package_list(&package_list_clone2, packages);
+            update_package_list(&package_list_clone2, packages, "Installed Packages");
         });
 
         orphans_btn.connect_clicked(move |_| {
             let packages = list_orphan_packages();
-            update_package_list(&package_list_clone3, packages);
+            update_package_list(&package_list_clone3, packages, "Orphan Packages");
         });
 
         deps_btn.connect_clicked(move |_| {
             let packages = list_dependencies();
-            update_package_list(&package_list_clone4, packages);
+            update_package_list(&package_list_clone4, packages, "Dependencies");
         });
 
         // Initial load
         let packages = list_installed_packages();
-        update_package_list(&package_list, packages);
+        update_package_list(&package_list, packages, "Installed Packages");
 
         window.show();
     });
