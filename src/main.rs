@@ -154,41 +154,77 @@ fn list_dependencies() -> Vec<Package> {
 }
 
 fn create_package_row(package: &Package) -> Box {
-    let row_box = Box::new(gtk4::Orientation::Vertical, 4);
-    row_box.set_margin_top(8);
-    row_box.set_margin_bottom(8);
+    let row_box = Box::new(gtk4::Orientation::Horizontal, 12);
+    row_box.set_margin_top(4);
+    row_box.set_margin_bottom(4);
     row_box.set_margin_start(12);
     row_box.set_margin_end(12);
 
-    let top_row = Box::new(gtk4::Orientation::Horizontal, 12);
-    
+    // Name column (40%)
     let name_label = Label::new(Some(&package.name));
     name_label.set_halign(gtk4::Align::Start);
     name_label.set_hexpand(true);
-    name_label.add_css_class("title-3");
-    top_row.append(&name_label);
+    name_label.set_width_request(200);
+    row_box.append(&name_label);
 
+    // Version column (15%)
     let version_label = Label::new(Some(&package.version));
-    version_label.set_halign(gtk4::Align::End);
-    top_row.append(&version_label);
-    row_box.append(&top_row);
+    version_label.set_halign(gtk4::Align::Start);
+    version_label.set_width_request(100);
+    row_box.append(&version_label);
 
-    let bottom_row = Box::new(gtk4::Orientation::Horizontal, 12);
-    
+    // Origin column (25%)
     let origin_label = Label::new(Some(&package.origin));
     origin_label.set_halign(gtk4::Align::Start);
     origin_label.add_css_class("dim-label");
-    origin_label.set_hexpand(true);
-    bottom_row.append(&origin_label);
+    origin_label.set_width_request(150);
+    row_box.append(&origin_label);
 
+    // Comment column (20%)
     let comment_label = Label::new(Some(&package.comment));
     comment_label.set_halign(gtk4::Align::Start);
+    comment_label.add_css_class("dim-label");
     comment_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-    comment_label.set_max_width_chars(50);
-    bottom_row.append(&comment_label);
-    row_box.append(&bottom_row);
+    comment_label.set_width_request(200);
+    row_box.append(&comment_label);
 
     row_box
+}
+
+fn create_header_row() -> Box {
+    let header_box = Box::new(gtk4::Orientation::Horizontal, 12);
+    header_box.set_margin_top(8);
+    header_box.set_margin_bottom(8);
+    header_box.set_margin_start(12);
+    header_box.set_margin_end(12);
+    header_box.add_css_class("header-row");
+
+    let name_label = Label::new(Some("Name"));
+    name_label.set_halign(gtk4::Align::Start);
+    name_label.set_hexpand(true);
+    name_label.set_width_request(200);
+    name_label.add_css_class("title-4");
+    header_box.append(&name_label);
+
+    let version_label = Label::new(Some("Version"));
+    version_label.set_halign(gtk4::Align::Start);
+    version_label.set_width_request(100);
+    version_label.add_css_class("title-4");
+    header_box.append(&version_label);
+
+    let origin_label = Label::new(Some("Origin"));
+    origin_label.set_halign(gtk4::Align::Start);
+    origin_label.set_width_request(150);
+    origin_label.add_css_class("title-4");
+    header_box.append(&origin_label);
+
+    let comment_label = Label::new(Some("Description"));
+    comment_label.set_halign(gtk4::Align::Start);
+    comment_label.set_width_request(200);
+    comment_label.add_css_class("title-4");
+    header_box.append(&comment_label);
+
+    header_box
 }
 
 fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &str) {
@@ -196,21 +232,28 @@ fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &s
         package_list.remove(&child);
     }
 
-    let header_box = Box::new(gtk4::Orientation::Horizontal, 0);
-    header_box.set_margin_top(12);
-    header_box.set_margin_bottom(12);
-    header_box.set_margin_start(12);
-    header_box.set_margin_end(12);
+    // Title with count
+    let title_box = Box::new(gtk4::Orientation::Horizontal, 0);
+    title_box.set_margin_top(12);
+    title_box.set_margin_bottom(8);
+    title_box.set_margin_start(12);
+    title_box.set_margin_end(12);
     let count_label = Label::new(Some(&format!("{} ({} packages)", title, packages.len())));
     count_label.add_css_class("title-2");
-    header_box.append(&count_label);
-    package_list.append(&header_box);
+    title_box.append(&count_label);
+    package_list.append(&title_box);
 
+    // Column headers
+    let header_row = create_header_row();
+    package_list.append(&header_row);
+
+    // Separator
     let sep = Separator::new(gtk4::Orientation::Horizontal);
     sep.set_margin_start(12);
     sep.set_margin_end(12);
     package_list.append(&sep);
 
+    // Package rows
     for pkg in &packages {
         let row = create_package_row(pkg);
         package_list.append(&row);
