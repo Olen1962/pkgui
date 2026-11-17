@@ -427,21 +427,26 @@ fn create_install_dialog(parent: &ApplicationWindow) {
         for (i, pkg) in packages.iter().enumerate() {
             let row_idx = (i + 2) as i32;
 
+            // Make the entire row clickable using GestureClick
+            let row_box = Box::new(gtk4::Orientation::Horizontal, 24);
+            row_box.set_halign(Align::Fill);
+            row_box.set_vexpand(false);
+            
             let name_label = Label::new(Some(&pkg.name));
             name_label.set_halign(Align::Start);
             name_label.set_xalign(0.0);
-            grid.attach(&name_label, 0, row_idx, 1, 1);
+            row_box.append(&name_label);
 
             let version_label = Label::new(Some(&pkg.version));
             version_label.set_halign(Align::Start);
             version_label.set_xalign(0.0);
-            grid.attach(&version_label, 1, row_idx, 1, 1);
+            row_box.append(&version_label);
 
             let origin_label = Label::new(Some(&pkg.origin));
             origin_label.set_halign(Align::Start);
             origin_label.set_xalign(0.0);
             origin_label.add_css_class("dim-label");
-            grid.attach(&origin_label, 2, row_idx, 1, 1);
+            row_box.append(&origin_label);
 
             let comment_label = Label::new(Some(&pkg.comment));
             comment_label.set_halign(Align::Start);
@@ -449,12 +454,7 @@ fn create_install_dialog(parent: &ApplicationWindow) {
             comment_label.add_css_class("dim-label");
             comment_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
             comment_label.set_hexpand(true);
-            grid.attach(&comment_label, 3, row_idx, 1, 1);
-
-            // Make the entire row clickable using GestureClick
-            let row_box = Box::new(gtk4::Orientation::Horizontal, 0);
-            row_box.set_halign(Align::Fill);
-            row_box.set_vexpand(false);
+            row_box.append(&comment_label);
             
             let selected_for_row = Arc::clone(&selected_package_for_search);
             let install_btn_for_row = install_btn_for_search.clone();
