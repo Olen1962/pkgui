@@ -29,10 +29,10 @@ fn list_packages_with_flag(flag: Option<&str>) -> Vec<Package> {
                 .map(|line| {
                     let parts: Vec<&str> = line.split('\t').collect();
                     Package {
-                        name: parts.get(0).cloned().unwrap_or_default(),
-                        version: parts.get(1).cloned().unwrap_or_default(),
-                        origin: parts.get(2).cloned().unwrap_or_default(),
-                        comment: parts.get(3).cloned().unwrap_or_default(),
+                        name: parts.get(0).cloned().unwrap_or_default().to_string(),
+                        version: parts.get(1).cloned().unwrap_or_default().to_string(),
+                        origin: parts.get(2).cloned().unwrap_or_default().to_string(),
+                        comment: parts.get(3).cloned().unwrap_or_default().to_string(),
                     }
                 })
                 .collect()
