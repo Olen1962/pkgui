@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Grid, Label, ListBox, ScrolledWindow, Separator, Align};
+use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Grid, GestureClick, Label, ScrolledWindow, Separator, Align};
 use libadwaita::{HeaderBar, WindowTitle};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
@@ -318,7 +318,10 @@ fn create_install_dialog(parent: &ApplicationWindow) {
         .build();
 
     let main_box = Box::new(gtk4::Orientation::Vertical, 12);
-    main_box.set_margin_all(12);
+    main_box.set_margin_top(12);
+    main_box.set_margin_bottom(12);
+    main_box.set_margin_start(12);
+    main_box.set_margin_end(12);
     dialog.set_child(Some(&main_box));
 
     // Search entry
@@ -357,7 +360,10 @@ fn create_install_dialog(parent: &ApplicationWindow) {
         let query = entry.text().to_string();
         if query.trim().is_empty() {
             let empty_box = Box::new(gtk4::Orientation::Vertical, 0);
-            empty_box.set_margin_all(24);
+            empty_box.set_margin_top(24);
+            empty_box.set_margin_bottom(24);
+            empty_box.set_margin_start(24);
+            empty_box.set_margin_end(24);
             let label = Label::new(Some("Enter a package name to search"));
             label.set_halign(Align::Center);
             label.add_css_class("dim-label");
@@ -373,7 +379,10 @@ fn create_install_dialog(parent: &ApplicationWindow) {
         
         if packages.is_empty() {
             let empty_box = Box::new(gtk4::Orientation::Vertical, 0);
-            empty_box.set_margin_all(24);
+            empty_box.set_margin_top(24);
+            empty_box.set_margin_bottom(24);
+            empty_box.set_margin_start(24);
+            empty_box.set_margin_end(24);
             let label = Label::new(Some("No packages found"));
             label.set_halign(Align::Center);
             label.add_css_class("dim-label");
@@ -387,7 +396,10 @@ fn create_install_dialog(parent: &ApplicationWindow) {
 
         // Create grid for results
         let outer_box = Box::new(gtk4::Orientation::Vertical, 0);
-        outer_box.set_margin_all(12);
+        outer_box.set_margin_top(12);
+        outer_box.set_margin_bottom(12);
+        outer_box.set_margin_start(12);
+        outer_box.set_margin_end(12);
 
         let grid = Grid::new();
         grid.set_column_spacing(24);
@@ -437,23 +449,23 @@ fn create_install_dialog(parent: &ApplicationWindow) {
             comment_label.set_hexpand(true);
             grid.attach(&comment_label, 3, row_idx, 1, 1);
 
-            // Make the entire row clickable
+            // Make the entire row clickable using GestureClick
             let row_box = Box::new(gtk4::Orientation::Horizontal, 0);
             row_box.set_halign(Align::Fill);
             row_box.set_vexpand(false);
             
-            let name_clone = name_label.clone();
-            let version_clone = version_label.clone();
-            let origin_clone = origin_label.clone();
-            let comment_clone = comment_label.clone();
             let selected_clone2 = selected_package.clone();
             let install_btn_clone2 = install_btn.clone();
+            let status_clone2 = status_label.clone();
+            let pkg_clone = pkg.clone();
             
-            row_box.connect_clicked(move |_| {
-                *selected_clone2.lock().unwrap() = Some(pkg.clone());
+            let gesture = GestureClick::new();
+            gesture.connect_pressed(move |_, _, _, _| {
+                *selected_clone2.lock().unwrap() = Some(pkg_clone.clone());
                 install_btn_clone2.set_sensitive(true);
-                status_clone.set_text(&format!("Selected: {}", pkg.name));
+                status_clone2.set_text(&format!("Selected: {}", pkg_clone.name));
             });
+            row_box.add_controller(gesture);
             
             // Add row to grid
             grid.attach(&row_box, 0, row_idx, 4, 1);
