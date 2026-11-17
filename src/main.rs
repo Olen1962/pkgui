@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Label, ListBox, ScrolledWindow};
+use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Label, ListBox, ScrolledWindow, Separator};
 use libadwaita::{HeaderBar, WindowTitle};
 use std::process::Command;
 
@@ -218,11 +218,26 @@ fn main() -> glib::ExitCode {
         sidebar.set_width_request(180);
         content_box.append(&sidebar);
 
+        // Action buttons (top section)
         let install_btn = Button::with_label("Install");
         let remove_btn = Button::with_label("Remove");
         let orphans_btn = Button::with_label("Orphans");
         let installed_btn = Button::with_label("Installed");
         let deps_btn = Button::with_label("Dependencies");
+
+        sidebar.append(&install_btn);
+        sidebar.append(&remove_btn);
+        sidebar.append(&orphans_btn);
+        sidebar.append(&installed_btn);
+        sidebar.append(&deps_btn);
+
+        // Separator
+        let separator = Separator::new(gtk4::Orientation::Horizontal);
+        separator.set_margin_top(12);
+        separator.set_margin_bottom(12);
+        sidebar.append(&separator);
+
+        // System buttons (bottom section)
         let prefs_btn = Button::with_label("Preferences");
         let quit_btn = Button::with_label("Quit");
 
@@ -236,11 +251,6 @@ fn main() -> glib::ExitCode {
             create_preferences_dialog(&window_clone2);
         });
 
-        sidebar.append(&install_btn);
-        sidebar.append(&remove_btn);
-        sidebar.append(&orphans_btn);
-        sidebar.append(&installed_btn);
-        sidebar.append(&deps_btn);
         sidebar.append(&prefs_btn);
         sidebar.append(&quit_btn);
 
