@@ -2,6 +2,7 @@ use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Grid, Label, ScrolledWindow, Separator, Align};
 use libadwaita::{HeaderBar, WindowTitle};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 
 struct Package {
     name: String,
@@ -153,6 +154,24 @@ fn list_dependencies() -> Vec<Package> {
     }
 }
 
+fn filter_packages(packages: &[Package], search_text: &str) -> Vec<Package> {
+    if search_text.is_empty() {
+        return packages.to_vec();
+    }
+    
+    let search_lower = search_text.to_lowercase();
+    packages
+        .iter()
+        .filter(|pkg| {
+            pkg.name.to_lowercase().contains(&search_lower) ||
+            pkg.version.to_lowercase().contains(&search_lower) ||
+            pkg.origin.to_lowercase().contains(&search_lower) ||
+            pkg.comment.to_lowercase().contains(&search_lower)
+        })
+        .cloned()
+        .collect()
+}
+
 fn update_package_list(scrolled: &ScrolledWindow, packages: Vec<Package>, title: &str) {
     let outer_box = Box::new(gtk4::Orientation::Vertical, 0);
     outer_box.set_margin_top(16);
@@ -176,12 +195,10 @@ fn update_package_list(scrolled: &ScrolledWindow, packages: Vec<Package>, title:
         return;
     }
 
-    // Grid unificada para garantir alinhamento perfeito entre colunas de todas as linhas
     let grid = Grid::new();
     grid.set_column_spacing(24);
     grid.set_row_spacing(8);
 
-    // Cabeçalhos
     let headers = ["Name", "Version", "Origin", "Description"];
     for (col, text) in headers.iter().enumerate() {
         let label = Label::new(Some(text));
@@ -194,13 +211,11 @@ fn update_package_list(scrolled: &ScrolledWindow, packages: Vec<Package>, title:
         grid.attach(&label, col as i32, 0, 1, 1);
     }
 
-    // Separador abaixo do cabeçalho
     let sep = Separator::new(gtk4::Orientation::Horizontal);
     sep.set_margin_top(4);
     sep.set_margin_bottom(8);
     grid.attach(&sep, 0, 1, 4, 1);
 
-    // Linhas de pacotes
     for (i, pkg) in packages.iter().enumerate() {
         let row_idx = (i + 2) as i32;
 
@@ -372,23 +387,48 @@ fn main() -> glib::ExitCode {
         let scrolled_clone3 = scrolled.clone();
         let scrolled_clone4 = scrolled.clone();
 
+        // Current category and packages
+        let current_category = Arc::new(Mutex::new("Installed".to_string()));
+        let all_packages = Arc::new(Mutex::new(list_installed_packages()));
+        
+        let search_entry_clone = search_entry.clone();
+        let scrolled_for_search = scrolled.clone();
+        let all_packages_clone = all_packages.clone();
+        let current_category_clone = current_category.clone();
+        
+        search_entry.connect_changed(move |entry| {
+            let search_text = entry.text().to_string();
+            let category = current_category_clone.lock().unwrap();
+            let packages = all_packages_clone.lock().unwrap();
+            let filtered = filter_packages(&packages, &search_text);
+            update_package_list(&scrolled_for_search, filtered, &category);
+        });
+
         refresh_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
+            *all_packages.lock().unwrap() = packages.clone();
+            *current_category.lock().unwrap() = "Installed Packages".to_string();
             update_package_list(&scrolled_clone, packages, "Installed Packages");
         });
 
         installed_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
+            *all_packages.lock().unwrap() = packages.clone();
+            *current_category.lock().unwrap() = "Installed Packages".to_string();
             update_package_list(&scrolled_clone2, packages, "Installed Packages");
         });
 
         orphans_btn.connect_clicked(move |_| {
             let packages = list_orphan_packages();
+            *all_packages.lock().unwrap() = packages.clone();
+            *current_category.lock().unwrap() = "Orphan Packages".to_string();
             update_package_list(&scrolled_clone3, packages, "Orphan Packages");
         });
 
         deps_btn.connect_clicked(move |_| {
             let packages = list_dependencies();
+            *all_packages.lock().unwrap() = packages.clone();
+            *current_category.lock().unwrap() = "Dependencies".to_string();
             update_package_list(&scrolled_clone4, packages, "Dependencies");
         });
 
