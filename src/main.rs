@@ -1,6 +1,6 @@
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Box, Button, Label, ScrolledWindow};
-use libadwaita::{Application as AdwApplication, HeaderBar};
+use libadwaita::HeaderBar;
 
 fn main() -> glib::ExitCode {
     // Create a new application
@@ -20,12 +20,16 @@ fn main() -> glib::ExitCode {
         // Header bar
         let header = HeaderBar::builder()
             .title_widget(&Label::new(Some("PkGUI")))
-            .show_title_buttons(true)
+            .show_end_title_buttons(true)
             .build();
         window.set_titlebar(Some(&header));
 
         // Main content
         let main_box = Box::new(gtk4::Orientation::Vertical, 12);
+        main_box.set_margin_top(12);
+        main_box.set_margin_bottom(12);
+        main_box.set_margin_start(12);
+        main_box.set_margin_end(12);
         window.set_child(Some(&main_box));
 
         // Welcome label
@@ -39,13 +43,19 @@ fn main() -> glib::ExitCode {
         let package_list = Label::new(Some("Package list will appear here\n\nFeatures:\n- List installed packages\n- Search packages\n- Install/Remove packages\n- System updates"));
         package_list.set_halign(gtk4::Align::Start);
         package_list.set_valign(gtk4::Align::Start);
-        package_list.set_margin_all(24);
+        package_list.set_margin_top(24);
+        package_list.set_margin_bottom(24);
+        package_list.set_margin_start(24);
+        package_list.set_margin_end(24);
         scrolled.set_child(Some(&package_list));
         main_box.append(&scrolled);
 
         // Action buttons
         let button_box = Box::new(gtk4::Orientation::Horizontal, 12);
-        button_box.set_margin_all(12);
+        button_box.set_margin_top(12);
+        button_box.set_margin_bottom(12);
+        button_box.set_margin_start(12);
+        button_box.set_margin_end(12);
         button_box.set_halign(gtk4::Align::Center);
 
         let refresh_btn = Button::with_label("Refresh");
