@@ -10,141 +10,65 @@ struct Package {
     comment: String,
 }
 
-fn parse_pkg_info_output(output: &str) -> Vec<Package> {
-    let mut packages = Vec::new();
-    let mut current_name = String::new();
-    let mut current_version = String::new();
-    let mut current_origin = String::new();
-    let mut current_comment = String::new();
-    let mut in_package = false;
+fn run_pkg_query(args: &[&str]) -> Vec<Vec<String>> {
+    let output = Command::new("pkg")
+        .args(args)
+        .output();
 
-    for line in output.lines() {
-        let trimmed = line.trim();
-        
-        if trimmed.is_empty() {
-            continue;
+    match output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| {
+                    line.split('\t').map(|s| s.to_string()).collect()
+                })
+                .collect()
         }
-
-        // Package header line (name-version:)
-        if trimmed.ends_with(':') {
-            // Save previous package if exists
-            if !current_name.is_empty() && in_package {
-                packages.push(Package {
-                    name: current_name,
-                    version: current_version,
-                    origin: current_origin,
-                    comment: current_comment,
-                });
-            }
-            
-            // Start new package
-            let parts: Vec<&str> = trimmed.trim_end_matches(':').split('-').collect();
-            current_name = parts.get(0).unwrap_or(&trimmed).to_string();
-            current_version = if parts.len() > 1 {
-                parts[1..].join("-")
-            } else {
-                String::new()
-            };
-            current_origin = String::new();
-            current_comment = String::new();
-            in_package = true;
-        } else if in_package {
-            // Parse package info lines
-            if trimmed.starts_with("Origin :") {
-                current_origin = trimmed.trim_start_matches("Origin :").trim().to_string();
-            } else if trimmed.starts_with("Comment :") {
-                current_comment = trimmed.trim_start_matches("Comment :").trim().to_string();
-            }
-        }
+        _ => vec![],
     }
-
-    // Save last package
-    if !current_name.is_empty() && in_package {
-        packages.push(Package {
-            name: current_name,
-            version: current_version,
-            origin: current_origin,
-            comment: current_comment,
-        });
-    }
-
-    packages
 }
 
 fn list_installed_packages() -> Vec<Package> {
-    let output = Command::new("pkg")
-        .arg("info")
-        .arg("-l")
-        .output();
-
-    match output {
-        Ok(result) if result.status.success() => {
-            let stdout = String::from_utf8_lossy(&result.stdout);
-            parse_pkg_info_output(&stdout)
+    // Use pkg query with tab-separated fields: name, version, origin, comment
+    let lines = run_pkg_query(&["query", "%n\t%v\t%o\t%c"]);
+    
+    lines.into_iter().map(|parts| {
+        Package {
+            name: parts.get(0).cloned().unwrap_or_default(),
+            version: parts.get(1).cloned().unwrap_or_default(),
+            origin: parts.get(2).cloned().unwrap_or_default(),
+            comment: parts.get(3).cloned().unwrap_or_default(),
         }
-        Ok(result) => {
-            eprintln!("pkg info failed: {}", String::from_utf8_lossy(&result.stderr));
-            vec![]
-        }
-        Err(e) => {
-            eprintln!("Error running pkg info: {}", e);
-            vec![]
-        }
-    }
+    }).collect()
 }
 
 fn list_orphan_packages() -> Vec<Package> {
-    let output = Command::new("pkg")
-        .arg("query")
-        .arg("-o")
-        .arg("%n-%v")
-        .output();
-
-    match output {
-        Ok(result) if result.status.success() => {
-            String::from_utf8_lossy(&result.stdout)
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| {
-                    let parts: Vec<&str> = line.trim().split('-').collect();
-                    Package {
-                        name: parts.get(0).unwrap_or(&line).to_string(),
-                        version: if parts.len() > 1 { parts[1..].join("-") } else { String::new() },
-                        origin: String::new(),
-                        comment: String::new(),
-                    }
-                })
-                .collect()
+    // -o flag for orphan packages
+    let lines = run_pkg_query(&["query", "-o", "%n\t%v\t%o\t%c"]);
+    
+    lines.into_iter().map(|parts| {
+        Package {
+            name: parts.get(0).cloned().unwrap_or_default(),
+            version: parts.get(1).cloned().unwrap_or_default(),
+            origin: parts.get(2).cloned().unwrap_or_default(),
+            comment: parts.get(3).cloned().unwrap_or_default(),
         }
-        _ => vec![],
-    }
+    }).collect()
 }
 
 fn list_dependencies() -> Vec<Package> {
-    let output = Command::new("pkg")
-        .arg("query")
-        .arg("-d")
-        .arg("%n-%v")
-        .output();
-
-    match output {
-        Ok(result) if result.status.success() => {
-            String::from_utf8_lossy(&result.stdout)
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| {
-                    let parts: Vec<&str> = line.trim().split('-').collect();
-                    Package {
-                        name: parts.get(0).unwrap_or(&line).to_string(),
-                        version: if parts.len() > 1 { parts[1..].join("-") } else { String::new() },
-                        origin: String::new(),
-                        comment: String::new(),
-                    }
-                })
-                .collect()
+    // -d flag for dependencies
+    let lines = run_pkg_query(&["query", "-d", "%n\t%v\t%o\t%c"]);
+    
+    lines.into_iter().map(|parts| {
+        Package {
+            name: parts.get(0).cloned().unwrap_or_default(),
+            version: parts.get(1).cloned().unwrap_or_default(),
+            origin: parts.get(2).cloned().unwrap_or_default(),
+            comment: parts.get(3).cloned().unwrap_or_default(),
         }
-        _ => vec![],
-    }
+    }).collect()
 }
 
 fn create_package_row(package: &Package) -> Box {
