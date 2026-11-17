@@ -190,8 +190,8 @@ fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &s
     sep.set_margin_end(12);
     package_list.append(&sep);
 
-    for pkg in packages {
-        let row = create_package_row(&pkg);
+    for pkg in &packages {
+        let row = create_package_row(pkg);
         package_list.append(&row);
     }
 
