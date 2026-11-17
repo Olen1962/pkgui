@@ -10,46 +10,7 @@ struct Package {
     comment: String,
 }
 
-fn list_packages_with_flag(flag: Option<&str>) -> Vec<Package> {
-    let mut args = vec!["query"];
-    if let Some(f) = flag {
-        args.push(f);
-    }
-    args.push("%n\t%v\t%o\t%c");
-    
-    let output = Command::new("pkg")
-        .args(&args)
-        .output();
-
-    match output {
-        Ok(result) if result.status.success() => {
-            String::from_utf8_lossy(&result.stdout)
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| {
-                    let parts: Vec<&str> = line.split('\t').collect();
-                    Package {
-                        name: parts.get(0).cloned().unwrap_or_default().to_string(),
-                        version: parts.get(1).cloned().unwrap_or_default().to_string(),
-                        origin: parts.get(2).cloned().unwrap_or_default().to_string(),
-                        comment: parts.get(3).cloned().unwrap_or_default().to_string(),
-                    }
-                })
-                .collect()
-        }
-        Ok(result) => {
-            eprintln!("pkg query stderr: {}", String::from_utf8_lossy(&result.stderr));
-            vec![]
-        }
-        Err(e) => {
-            eprintln!("pkg query error: {}", e);
-            vec![]
-        }
-    }
-}
-
 fn list_installed_packages() -> Vec<Package> {
-    // Use pkg info -l to list only installed packages
     let output = Command::new("pkg")
         .arg("info")
         .arg("-l")
@@ -73,13 +34,10 @@ fn list_installed_packages() -> Vec<Package> {
                     continue;
                 }
 
-                // Package header: name-version:
                 if trimmed.ends_with(':') {
-                    // Save previous package
                     if in_pkg && !current_pkg.name.is_empty() {
                         packages.push(current_pkg);
                     }
-                    // Start new package
                     let name_ver = trimmed.trim_end_matches(':');
                     let parts: Vec<&str> = name_ver.split('-').collect();
                     current_pkg = Package {
@@ -100,7 +58,6 @@ fn list_installed_packages() -> Vec<Package> {
                 }
             }
 
-            // Save last package
             if in_pkg && !current_pkg.name.is_empty() {
                 packages.push(current_pkg);
             }
@@ -119,13 +76,150 @@ fn list_installed_packages() -> Vec<Package> {
 }
 
 fn list_orphan_packages() -> Vec<Package> {
-    // Use pkg query -o for orphan packages
-    list_packages_with_flag(Some("-o"))
+    // Use pkg autoremove -n to list orphan packages (dry run)
+    let output = Command::new("pkg")
+        .arg("autoremove")
+        .arg("-n")
+        .output();
+
+    match output {
+        Ok(result) if result.status.success() => {
+            let stdout = String::from_utf8_lossy(&result.stdout);
+            let mut names = Vec::new();
+            let mut in_list = false;
+
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("The following") || trimmed.starts_with("Number of") {
+                    continue;
+                }
+                if in_list && (trimmed.is_empty() || trimmed.chars().all(|c| c.is_whitespace())) {
+                    in_list = false;
+                    continue;
+                }
+                if trimmed.starts_with('\t') || trimmed.parse::<u32>().is_ok() {
+                    in_list = true;
+                    let clean = trimmed.trim_start_matches('\t').trim();
+                    if !clean.is_empty() && !clean.contains(' ') {
+                        names.push(clean.to_string());
+                    }
+                }
+            }
+
+            if names.is_empty() {
+                return vec![];
+            }
+
+            // Get details for each orphan package
+            let mut packages = Vec::new();
+            for name in names {
+                let output = Command::new("pkg")
+                    .arg("info")
+                    .arg(&name)
+                    .output();
+
+                if let Ok(result) = output {
+                    if result.status.success() {
+                        let stdout = String::from_utf8_lossy(&result.stdout);
+                        let mut pkg = Package {
+                            name: name.clone(),
+                            version: String::new(),
+                            origin: String::new(),
+                            comment: String::new(),
+                        };
+
+                        for line in stdout.lines() {
+                            let trimmed = line.trim();
+                            if trimmed.starts_with("Version :") {
+                                pkg.version = trimmed.trim_start_matches("Version :").trim().to_string();
+                            } else if trimmed.starts_with("Origin :") {
+                                pkg.origin = trimmed.trim_start_matches("Origin :").trim().to_string();
+                            } else if trimmed.starts_with("Comment :") {
+                                pkg.comment = trimmed.trim_start_matches("Comment :").trim().to_string();
+                            }
+                        }
+                        packages.push(pkg);
+                    }
+                }
+            }
+            packages
+        }
+        Ok(result) => {
+            eprintln!("pkg autoremove stderr: {}", String::from_utf8_lossy(&result.stderr));
+            vec![]
+        }
+        Err(e) => {
+            eprintln!("pkg autoremove error: {}", e);
+            vec![]
+        }
+    }
 }
 
 fn list_dependencies() -> Vec<Package> {
-    // Use pkg query -d for dependencies
-    list_packages_with_flag(Some("-d"))
+    // List all installed packages and filter those that are dependencies
+    let output = Command::new("pkg")
+        .arg("info")
+        .arg("-l")
+        .arg("-a")
+        .output();
+
+    match output {
+        Ok(result) if result.status.success() => {
+            let stdout = String::from_utf8_lossy(&result.stdout);
+            let mut packages = Vec::new();
+            let mut current_pkg = Package {
+                name: String::new(),
+                version: String::new(),
+                origin: String::new(),
+                comment: String::new(),
+            };
+            let mut in_pkg = false;
+
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                if trimmed.ends_with(':') {
+                    if in_pkg && !current_pkg.name.is_empty() {
+                        packages.push(current_pkg);
+                    }
+                    let name_ver = trimmed.trim_end_matches(':');
+                    let parts: Vec<&str> = name_ver.split('-').collect();
+                    current_pkg = Package {
+                        name: parts.get(0).unwrap_or(&name_ver).to_string(),
+                        version: if parts.len() > 1 { parts[1..].join("-") } else { String::new() },
+                        origin: String::new(),
+                        comment: String::new(),
+                    };
+                    in_pkg = true;
+                } else if in_pkg {
+                    if trimmed.starts_with("Origin :") {
+                        current_pkg.origin = trimmed.trim_start_matches("Origin :").trim().to_string();
+                    } else if trimmed.starts_with("Comment :") {
+                        current_pkg.comment = trimmed.trim_start_matches("Comment :").trim().to_string();
+                    } else if trimmed.starts_with("Version :") && current_pkg.version.is_empty() {
+                        current_pkg.version = trimmed.trim_start_matches("Version :").trim().to_string();
+                    }
+                }
+            }
+
+            if in_pkg && !current_pkg.name.is_empty() {
+                packages.push(current_pkg);
+            }
+
+            packages
+        }
+        Ok(result) => {
+            eprintln!("pkg info -l -a stderr: {}", String::from_utf8_lossy(&result.stderr));
+            vec![]
+        }
+        Err(e) => {
+            eprintln!("pkg info -l -a error: {}", e);
+            vec![]
+        }
+    }
 }
 
 fn create_package_row(package: &Package) -> Box {
@@ -135,7 +229,6 @@ fn create_package_row(package: &Package) -> Box {
     row_box.set_margin_start(12);
     row_box.set_margin_end(12);
 
-    // Top row: Name + Version
     let top_row = Box::new(gtk4::Orientation::Horizontal, 12);
     
     let name_label = Label::new(Some(&package.name));
@@ -149,7 +242,6 @@ fn create_package_row(package: &Package) -> Box {
     top_row.append(&version_label);
     row_box.append(&top_row);
 
-    // Bottom row: Origin + Comment
     let bottom_row = Box::new(gtk4::Orientation::Horizontal, 12);
     
     let origin_label = Label::new(Some(&package.origin));
@@ -173,7 +265,6 @@ fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &s
         package_list.remove(&child);
     }
 
-    // Add header with count
     let header_box = Box::new(gtk4::Orientation::Horizontal, 0);
     header_box.set_margin_top(12);
     header_box.set_margin_bottom(12);
@@ -184,7 +275,6 @@ fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &s
     header_box.append(&count_label);
     package_list.append(&header_box);
 
-    // Separator
     let sep = Separator::new(gtk4::Orientation::Horizontal);
     sep.set_margin_start(12);
     sep.set_margin_end(12);
@@ -273,7 +363,6 @@ fn main() -> glib::ExitCode {
         let main_box = Box::new(gtk4::Orientation::Vertical, 0);
         window.set_child(Some(&main_box));
 
-        // ===== TOP BAR =====
         let top_bar = Box::new(gtk4::Orientation::Horizontal, 12);
         top_bar.set_margin_top(12);
         top_bar.set_margin_bottom(12);
@@ -291,11 +380,9 @@ fn main() -> glib::ExitCode {
 
         main_box.append(&top_bar);
 
-        // ===== MAIN CONTENT (Horizontal: Sidebar + Package List) =====
         let content_box = Box::new(gtk4::Orientation::Horizontal, 0);
         main_box.append(&content_box);
 
-        // ===== SIDEBAR =====
         let sidebar = Box::new(gtk4::Orientation::Vertical, 6);
         sidebar.set_margin_top(12);
         sidebar.set_margin_bottom(12);
@@ -304,7 +391,6 @@ fn main() -> glib::ExitCode {
         sidebar.set_width_request(180);
         content_box.append(&sidebar);
 
-        // Action buttons (top section)
         let install_btn = Button::with_label("Install");
         let remove_btn = Button::with_label("Remove");
         let orphans_btn = Button::with_label("Orphans");
@@ -317,13 +403,11 @@ fn main() -> glib::ExitCode {
         sidebar.append(&installed_btn);
         sidebar.append(&deps_btn);
 
-        // Separator
         let separator = Separator::new(gtk4::Orientation::Horizontal);
         separator.set_margin_top(12);
         separator.set_margin_bottom(12);
         sidebar.append(&separator);
 
-        // System buttons (bottom section)
         let prefs_btn = Button::with_label("Preferences");
         let quit_btn = Button::with_label("Quit");
 
@@ -340,7 +424,6 @@ fn main() -> glib::ExitCode {
         sidebar.append(&prefs_btn);
         sidebar.append(&quit_btn);
 
-        // ===== PACKAGE LIST =====
         let package_area = Box::new(gtk4::Orientation::Vertical, 0);
         package_area.set_hexpand(true);
         content_box.append(&package_area);
@@ -351,7 +434,6 @@ fn main() -> glib::ExitCode {
         scrolled.set_child(Some(&package_list));
         package_area.append(&scrolled);
 
-        // Clone for signals
         let package_list_clone = package_list.clone();
         let package_list_clone2 = package_list.clone();
         let package_list_clone3 = package_list.clone();
@@ -377,7 +459,6 @@ fn main() -> glib::ExitCode {
             update_package_list(&package_list_clone4, packages, "Dependencies");
         });
 
-        // Initial load
         let packages = list_installed_packages();
         update_package_list(&package_list, packages, "Installed Packages");
 
