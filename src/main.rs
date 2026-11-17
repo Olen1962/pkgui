@@ -4,6 +4,7 @@ use libadwaita::{HeaderBar, WindowTitle};
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
+#[derive(Clone)]
 struct Package {
     name: String,
     version: String,
