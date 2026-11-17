@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Grid, Label, ListBox, ScrolledWindow, Separator};
+use gtk4::{Application, ApplicationWindow, Box, Button, Entry, Grid, Label, ScrolledWindow, Separator, Align};
 use libadwaita::{HeaderBar, WindowTitle};
 use std::process::Command;
 
@@ -153,137 +153,84 @@ fn list_dependencies() -> Vec<Package> {
     }
 }
 
-fn create_package_row(package: &Package) -> Grid {
-    let grid = Grid::new();
-    grid.set_margin_top(2);
-    grid.set_margin_bottom(2);
-    grid.set_margin_start(12);
-    grid.set_margin_end(12);
-    
-    // Column 0: Name
-    let name_label = Label::new(Some(&package.name));
-    name_label.set_halign(gtk4::Align::Start);
-    name_label.set_hexpand(true);
-    name_label.set_xalign(0.0);
-    grid.attach(&name_label, 0, 0, 1, 1);
+fn update_package_list(scrolled: &ScrolledWindow, packages: Vec<Package>, title: &str) {
+    let outer_box = Box::new(gtk4::Orientation::Vertical, 0);
+    outer_box.set_margin_top(16);
+    outer_box.set_margin_bottom(16);
+    outer_box.set_margin_start(16);
+    outer_box.set_margin_end(16);
 
-    // Column 1: Version
-    let version_label = Label::new(Some(&package.version));
-    version_label.set_halign(gtk4::Align::Start);
-    version_label.set_hexpand(false);
-    version_label.set_xalign(0.0);
-    grid.attach(&version_label, 1, 0, 1, 1);
-
-    // Column 2: Origin
-    let origin_label = Label::new(Some(&package.origin));
-    origin_label.set_halign(gtk4::Align::Start);
-    origin_label.set_hexpand(true);
-    origin_label.set_xalign(0.0);
-    origin_label.add_css_class("dim-label");
-    grid.attach(&origin_label, 2, 0, 1, 1);
-
-    // Column 3: Comment
-    let comment_label = Label::new(Some(&package.comment));
-    comment_label.set_halign(gtk4::Align::Start);
-    comment_label.set_hexpand(true);
-    comment_label.set_xalign(0.0);
-    comment_label.add_css_class("dim-label");
-    comment_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-    grid.attach(&comment_label, 3, 0, 1, 1);
-
-    // Set column widths
-    grid.insert_column(0);
-    grid.insert_column(1);
-    grid.insert_column(2);
-    grid.insert_column(3);
-    
-    grid
-}
-
-fn create_header_row() -> Grid {
-    let grid = Grid::new();
-    grid.set_margin_top(4);
-    grid.set_margin_bottom(4);
-    grid.set_margin_start(12);
-    grid.set_margin_end(12);
-    grid.add_css_class("header-row");
-
-    let name_label = Label::new(Some("Name"));
-    name_label.set_halign(gtk4::Align::Start);
-    name_label.set_hexpand(true);
-    name_label.set_xalign(0.0);
-    name_label.add_css_class("title-4");
-    grid.attach(&name_label, 0, 0, 1, 1);
-
-    let version_label = Label::new(Some("Version"));
-    version_label.set_halign(gtk4::Align::Start);
-    version_label.set_hexpand(false);
-    version_label.set_xalign(0.0);
-    version_label.add_css_class("title-4");
-    grid.attach(&version_label, 1, 0, 1, 1);
-
-    let origin_label = Label::new(Some("Origin"));
-    origin_label.set_halign(gtk4::Align::Start);
-    origin_label.set_hexpand(true);
-    origin_label.set_xalign(0.0);
-    origin_label.add_css_class("title-4");
-    grid.attach(&origin_label, 2, 0, 1, 1);
-
-    let comment_label = Label::new(Some("Description"));
-    comment_label.set_halign(gtk4::Align::Start);
-    comment_label.set_hexpand(true);
-    comment_label.set_xalign(0.0);
-    comment_label.add_css_class("title-4");
-    grid.attach(&comment_label, 3, 0, 1, 1);
-
-    // Set column widths
-    grid.insert_column(0);
-    grid.insert_column(1);
-    grid.insert_column(2);
-    grid.insert_column(3);
-    
-    grid
-}
-
-fn update_package_list(package_list: &ListBox, packages: Vec<Package>, title: &str) {
-    while let Some(child) = package_list.first_child() {
-        package_list.remove(&child);
-    }
-
-    // Title with count
-    let title_box = Box::new(gtk4::Orientation::Horizontal, 0);
-    title_box.set_margin_top(12);
-    title_box.set_margin_bottom(8);
-    title_box.set_margin_start(12);
-    title_box.set_margin_end(12);
     let count_label = Label::new(Some(&format!("{} ({} packages)", title, packages.len())));
     count_label.add_css_class("title-2");
-    title_box.append(&count_label);
-    package_list.append(&title_box);
-
-    // Column headers
-    let header_row = create_header_row();
-    package_list.append(&header_row);
-
-    // Separator
-    let sep = Separator::new(gtk4::Orientation::Horizontal);
-    sep.set_margin_start(12);
-    sep.set_margin_end(12);
-    package_list.append(&sep);
-
-    // Package rows
-    for pkg in &packages {
-        let row = create_package_row(pkg);
-        package_list.append(&row);
-    }
+    count_label.set_halign(Align::Start);
+    count_label.set_margin_bottom(12);
+    outer_box.append(&count_label);
 
     if packages.is_empty() {
         let no_packages = Label::new(Some("No packages found."));
-        no_packages.set_halign(gtk4::Align::Center);
+        no_packages.set_halign(Align::Center);
         no_packages.set_margin_top(24);
         no_packages.set_margin_bottom(24);
-        package_list.append(&no_packages);
+        outer_box.append(&no_packages);
+        scrolled.set_child(Some(&outer_box));
+        return;
     }
+
+    // Grid unificada para garantir alinhamento perfeito entre colunas de todas as linhas
+    let grid = Grid::new();
+    grid.set_column_spacing(24);
+    grid.set_row_spacing(8);
+
+    // Cabeçalhos
+    let headers = ["Name", "Version", "Origin", "Description"];
+    for (col, text) in headers.iter().enumerate() {
+        let label = Label::new(Some(text));
+        label.set_halign(Align::Start);
+        label.set_xalign(0.0);
+        label.add_css_class("title-4");
+        if col == 3 {
+            label.set_hexpand(true);
+        }
+        grid.attach(&label, col as i32, 0, 1, 1);
+    }
+
+    // Separador abaixo do cabeçalho
+    let sep = Separator::new(gtk4::Orientation::Horizontal);
+    sep.set_margin_top(4);
+    sep.set_margin_bottom(8);
+    grid.attach(&sep, 0, 1, 4, 1);
+
+    // Linhas de pacotes
+    for (i, pkg) in packages.iter().enumerate() {
+        let row_idx = (i + 2) as i32;
+
+        let name_label = Label::new(Some(&pkg.name));
+        name_label.set_halign(Align::Start);
+        name_label.set_xalign(0.0);
+        grid.attach(&name_label, 0, row_idx, 1, 1);
+
+        let version_label = Label::new(Some(&pkg.version));
+        version_label.set_halign(Align::Start);
+        version_label.set_xalign(0.0);
+        grid.attach(&version_label, 1, row_idx, 1, 1);
+
+        let origin_label = Label::new(Some(&pkg.origin));
+        origin_label.set_halign(Align::Start);
+        origin_label.set_xalign(0.0);
+        origin_label.add_css_class("dim-label");
+        grid.attach(&origin_label, 2, row_idx, 1, 1);
+
+        let comment_label = Label::new(Some(&pkg.comment));
+        comment_label.set_halign(Align::Start);
+        comment_label.set_xalign(0.0);
+        comment_label.add_css_class("dim-label");
+        comment_label.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        comment_label.set_hexpand(true);
+        grid.attach(&comment_label, 3, row_idx, 1, 1);
+    }
+
+    outer_box.append(&grid);
+    scrolled.set_child(Some(&outer_box));
 }
 
 fn create_preferences_dialog(parent: &ApplicationWindow) {
@@ -303,7 +250,7 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
     dialog.set_child(Some(&main_box));
 
     let theme_label = Label::new(Some("Theme:"));
-    theme_label.set_halign(gtk4::Align::Start);
+    theme_label.set_halign(Align::Start);
     main_box.append(&theme_label);
 
     let theme_box = Box::new(gtk4::Orientation::Horizontal, 12);
@@ -316,7 +263,7 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
     main_box.append(&theme_box);
 
     let ok_btn = Button::with_label("OK");
-    ok_btn.set_halign(gtk4::Align::End);
+    ok_btn.set_halign(Align::End);
     let dialog_clone = dialog.clone();
     ok_btn.connect_clicked(move |_| {
         dialog_clone.close();
@@ -418,38 +365,35 @@ fn main() -> glib::ExitCode {
         let scrolled = ScrolledWindow::new();
         scrolled.set_vexpand(true);
         scrolled.set_hexpand(true);
-        let package_list = ListBox::new();
-        package_list.set_selection_mode(gtk4::SelectionMode::None);
-        scrolled.set_child(Some(&package_list));
         package_area.append(&scrolled);
 
-        let package_list_clone = package_list.clone();
-        let package_list_clone2 = package_list.clone();
-        let package_list_clone3 = package_list.clone();
-        let package_list_clone4 = package_list.clone();
+        let scrolled_clone = scrolled.clone();
+        let scrolled_clone2 = scrolled.clone();
+        let scrolled_clone3 = scrolled.clone();
+        let scrolled_clone4 = scrolled.clone();
 
         refresh_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
-            update_package_list(&package_list_clone, packages, "Installed Packages");
+            update_package_list(&scrolled_clone, packages, "Installed Packages");
         });
 
         installed_btn.connect_clicked(move |_| {
             let packages = list_installed_packages();
-            update_package_list(&package_list_clone2, packages, "Installed Packages");
+            update_package_list(&scrolled_clone2, packages, "Installed Packages");
         });
 
         orphans_btn.connect_clicked(move |_| {
             let packages = list_orphan_packages();
-            update_package_list(&package_list_clone3, packages, "Orphan Packages");
+            update_package_list(&scrolled_clone3, packages, "Orphan Packages");
         });
 
         deps_btn.connect_clicked(move |_| {
             let packages = list_dependencies();
-            update_package_list(&package_list_clone4, packages, "Dependencies");
+            update_package_list(&scrolled_clone4, packages, "Dependencies");
         });
 
         let packages = list_installed_packages();
-        update_package_list(&package_list, packages, "Installed Packages");
+        update_package_list(&scrolled, packages, "Installed Packages");
 
         window.show();
     });
