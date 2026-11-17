@@ -1,0 +1,18 @@
+[package]
+name = "pkgui"
+version = "0.1.0"
+edition = "2021"
+authors = ["Olen1962"]
+description = "Software Manager para BSD com ferramentas nativas"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+gtk4 = "0.8"
+libadwaita = "0.5"
+glib = "0.18"
+once_cell = "1.18"
+
+[profile.release]
+opt-level = 2
+lto = true
