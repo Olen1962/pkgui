@@ -5,12 +5,13 @@ use std::process::Command;
 
 struct Package {
     name: String,
+    version: String,
 }
 
 fn list_installed_packages() -> Vec<Package> {
     let output = Command::new("pkg")
         .arg("query")
-        .arg("%n")
+        .arg("%n-%v")
         .output();
 
     match output {
@@ -18,8 +19,59 @@ fn list_installed_packages() -> Vec<Package> {
             String::from_utf8_lossy(&result.stdout)
                 .lines()
                 .filter(|line| !line.trim().is_empty())
-                .map(|name| Package {
-                    name: name.trim().to_string(),
+                .map(|line| {
+                    let parts: Vec<&str> = line.trim().split('-').collect();
+                    let name = parts.get(0).unwrap_or(&line).to_string();
+                    let version = parts.get(1).unwrap_or(&"").to_string();
+                    Package { name, version }
+                })
+                .collect()
+        }
+        _ => vec![],
+    }
+}
+
+fn list_orphan_packages() -> Vec<Package> {
+    let output = Command::new("pkg")
+        .arg("query")
+        .arg("%n-%v")
+        .arg("-a")
+        .output();
+
+    match output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| {
+                    let parts: Vec<&str> = line.trim().split('-').collect();
+                    let name = parts.get(0).unwrap_or(&line).to_string();
+                    let version = parts.get(1).unwrap_or(&"").to_string();
+                    Package { name, version }
+                })
+                .collect()
+        }
+        _ => vec![],
+    }
+}
+
+fn list_dependencies() -> Vec<Package> {
+    let output = Command::new("pkg")
+        .arg("query")
+        .arg("%n-%v")
+        .arg("-d")
+        .output();
+
+    match output {
+        Ok(result) if result.status.success() => {
+            String::from_utf8_lossy(&result.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| {
+                    let parts: Vec<&str> = line.trim().split('-').collect();
+                    let name = parts.get(0).unwrap_or(&line).to_string();
+                    let version = parts.get(1).unwrap_or(&"").to_string();
+                    Package { name, version }
                 })
                 .collect()
         }
@@ -36,28 +88,29 @@ fn create_package_row(package: &Package) -> Box {
 
     let name_label = Label::new(Some(&package.name));
     name_label.set_halign(gtk4::Align::Start);
+    name_label.set_hexpand(true);
     name_label.add_css_class("title-3");
     row_box.append(&name_label);
 
-    let version_label = Label::new(Some("1.0.0"));
+    let version_label = Label::new(Some(&package.version));
     version_label.set_halign(gtk4::Align::End);
     row_box.append(&version_label);
 
     row_box
 }
 
-fn update_package_list(package_list: &ListBox) {
+fn update_package_list(package_list: &ListBox, packages: Vec<Package>) {
     while let Some(child) = package_list.first_child() {
         package_list.remove(&child);
     }
 
-    for pkg in list_installed_packages() {
+    for pkg in packages {
         let row = create_package_row(&pkg);
         package_list.append(&row);
     }
 
     if package_list.first_child().is_none() {
-        let no_packages = Label::new(Some("No packages found. Run 'pkg install' to add packages."));
+        let no_packages = Label::new(Some("No packages found."));
         no_packages.set_halign(gtk4::Align::Center);
         no_packages.set_margin_top(24);
         no_packages.set_margin_bottom(24);
@@ -81,7 +134,6 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
     main_box.set_margin_end(24);
     dialog.set_child(Some(&main_box));
 
-    // Theme section
     let theme_label = Label::new(Some("Theme:"));
     theme_label.set_halign(gtk4::Align::Start);
     main_box.append(&theme_label);
@@ -95,7 +147,6 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
     theme_box.append(&system_btn);
     main_box.append(&theme_box);
 
-    // Language section
     let lang_label = Label::new(Some("Language:"));
     lang_label.set_halign(gtk4::Align::Start);
     main_box.append(&lang_label);
@@ -103,7 +154,6 @@ fn create_preferences_dialog(parent: &ApplicationWindow) {
     let lang_combo = gtk4::DropDown::from_strings(&["System", "English", "Portuguese"]);
     main_box.append(&lang_combo);
 
-    // OK button
     let ok_btn = Button::with_label("OK");
     ok_btn.set_halign(gtk4::Align::End);
     let dialog_clone = dialog.clone();
@@ -128,14 +178,12 @@ fn main() -> glib::ExitCode {
             .default_height(700)
             .build();
 
-        // Header bar
         let header = HeaderBar::builder()
             .title_widget(&WindowTitle::new("PkGUI", "BSD Package Manager"))
             .show_end_title_buttons(true)
             .build();
         window.set_titlebar(Some(&header));
 
-        // Main container
         let main_box = Box::new(gtk4::Orientation::Vertical, 0);
         window.set_child(Some(&main_box));
 
@@ -167,7 +215,7 @@ fn main() -> glib::ExitCode {
         sidebar.set_margin_bottom(12);
         sidebar.set_margin_start(12);
         sidebar.set_margin_end(12);
-        sidebar.set_width_request(150);
+        sidebar.set_width_request(180);
         content_box.append(&sidebar);
 
         let install_btn = Button::with_label("Install");
@@ -175,32 +223,6 @@ fn main() -> glib::ExitCode {
         let orphans_btn = Button::with_label("Orphans");
         let installed_btn = Button::with_label("Installed");
         let deps_btn = Button::with_label("Dependencies");
-
-        sidebar.append(&install_btn);
-        sidebar.append(&remove_btn);
-        sidebar.append(&orphans_btn);
-        sidebar.append(&installed_btn);
-        sidebar.append(&deps_btn);
-
-        // ===== PACKAGE LIST =====
-        let package_area = Box::new(gtk4::Orientation::Vertical, 0);
-        package_area.set_hexpand(true);
-        content_box.append(&package_area);
-
-        let scrolled = ScrolledWindow::new();
-        let package_list = ListBox::new();
-        package_list.set_selection_mode(gtk4::SelectionMode::None);
-        scrolled.set_child(Some(&package_list));
-        package_area.append(&scrolled);
-
-        // ===== BOTTOM BAR =====
-        let bottom_bar = Box::new(gtk4::Orientation::Horizontal, 12);
-        bottom_bar.set_margin_top(12);
-        bottom_bar.set_margin_bottom(12);
-        bottom_bar.set_margin_start(12);
-        bottom_bar.set_margin_end(12);
-        bottom_bar.set_halign(gtk4::Align::End);
-
         let prefs_btn = Button::with_label("Preferences");
         let quit_btn = Button::with_label("Quit");
 
@@ -214,18 +236,53 @@ fn main() -> glib::ExitCode {
             create_preferences_dialog(&window_clone2);
         });
 
-        bottom_bar.append(&prefs_btn);
-        bottom_bar.append(&quit_btn);
-        main_box.append(&bottom_bar);
+        sidebar.append(&install_btn);
+        sidebar.append(&remove_btn);
+        sidebar.append(&orphans_btn);
+        sidebar.append(&installed_btn);
+        sidebar.append(&deps_btn);
+        sidebar.append(&prefs_btn);
+        sidebar.append(&quit_btn);
 
-        // Connect signals
+        // ===== PACKAGE LIST =====
+        let package_area = Box::new(gtk4::Orientation::Vertical, 0);
+        package_area.set_hexpand(true);
+        content_box.append(&package_area);
+
+        let scrolled = ScrolledWindow::new();
+        let package_list = ListBox::new();
+        package_list.set_selection_mode(gtk4::SelectionMode::None);
+        scrolled.set_child(Some(&package_list));
+        package_area.append(&scrolled);
+
+        // Clone for signals
         let package_list_clone = package_list.clone();
+        let package_list_clone2 = package_list.clone();
+        let package_list_clone3 = package_list.clone();
+
         refresh_btn.connect_clicked(move |_| {
-            update_package_list(&package_list_clone);
+            let packages = list_installed_packages();
+            update_package_list(&package_list_clone, packages);
+        });
+
+        installed_btn.connect_clicked(move |_| {
+            let packages = list_installed_packages();
+            update_package_list(&package_list_clone2, packages);
+        });
+
+        orphans_btn.connect_clicked(move |_| {
+            let packages = list_orphan_packages();
+            update_package_list(&package_list_clone3, packages);
+        });
+
+        deps_btn.connect_clicked(move |_| {
+            let packages = list_dependencies();
+            update_package_list(&package_list, packages);
         });
 
         // Initial load
-        update_package_list(&package_list);
+        let packages = list_installed_packages();
+        update_package_list(&package_list, packages);
 
         window.show();
     });
