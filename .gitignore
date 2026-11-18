@@ -1,4 +1,12 @@
-/target
-*.rs.bk
+/target/
+**/*.rs.bk
 *.orig
 .DS_Store
+
+# Ficheiros temporários de editores (ex: VS Code, Neovim, Emacs)
+.vscode/
+.idea/
+*~
+*.swp
+*.swo
+
